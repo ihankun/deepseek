@@ -82,9 +82,9 @@ function showMainWindow(): void {
       title: 'DeepSeek Harness',
       icon: APP_ICON,
       autoHideMenuBar: true,
-      // No system title bar: macOS keeps the traffic lights over the content
-      // (hidden style), win/linux go fully frameless and get the injected
-      // title bar with its own window controls.
+      // No system title bar: macOS keeps the traffic lights over the injected
+      // drag strip (hidden style), win/linux go fully frameless and get the
+      // injected title bar with its own window controls.
       ...(IS_MAC
         ? { titleBarStyle: 'hidden' as const, trafficLightPosition: { x: 14, y: 14 } }
         : { frame: false }),
@@ -102,8 +102,8 @@ function showMainWindow(): void {
       mainWindow?.hide()
     })
     void mainWindow.loadURL(activeUrl)
-    // The page layout reads window.dshWindow (the macOS traffic-light
-    // reservation); a failed preload silently breaks that, so report it.
+    // The injected title bar reads window.dshWindow (win/linux window
+    // controls); a failed preload silently breaks that, so report it.
     mainWindow.webContents.on('preload-error', (_, preloadPath, error) => {
       console.error(`electron: preload failed to load ${preloadPath}: ${error.message}`)
     })
@@ -115,11 +115,9 @@ function showMainWindow(): void {
     mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
       console.error(`electron: page load failed (${errorCode}) ${errorDescription} at ${validatedURL}`)
     })
-    if (!IS_MAC) {
-      mainWindow.webContents.on('did-finish-load', () => {
-        if (mainWindow !== undefined) injectTitleBar(mainWindow)
-      })
-    }
+    mainWindow.webContents.on('did-finish-load', () => {
+      if (mainWindow !== undefined) injectTitleBar(mainWindow)
+    })
     return
   }
   if (mainWindow.isMinimized()) mainWindow.restore()
@@ -161,22 +159,21 @@ function createTray(): void {
   tray.on('click', showMainWindow)
 }
 
-/** The frameless title bar injected into the page on win/linux, as a script. */
-const TITLE_BAR_INJECTION = (dark: boolean): string => {
-  const background = dark ? 'rgba(32, 32, 32, 0.85)' : 'rgba(250, 250, 250, 0.85)'
+/**
+ * The title bar injected into the page, as a script. win/linux get a visible
+ * strip with window controls and the content pushed below it; macOS gets a
+ * fully transparent strip that leaves the layout untouched — the system
+ * traffic lights already float over it, and only strip areas with nothing
+ * interactive below drag the window.
+ */
+const TITLE_BAR_INJECTION = (dark: boolean, mac: boolean): string => {
   const foreground = dark ? '#e8e8e8' : '#1a1a1a'
   const hover = dark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'
-  const border = dark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'
-  return `(() => {
-  if (document.getElementById('dsh-titlebar') !== null) return
-  const bar = document.createElement('div')
-  bar.id = 'dsh-titlebar'
-  bar.style.cssText = [
-    'position: fixed', 'top: 0', 'left: 0', 'right: 0', 'height: 40px',
-    'display: flex', 'align-items: center', 'justify-content: flex-end',
-    'z-index: 2147483647', '-webkit-app-region: drag', 'user-select: none',
-    'background: ${background}', 'border-bottom: 1px solid ${border}',
-  ].join(';')
+  const chrome = mac ? '' : `
+  const background = ${dark ? "'rgba(32, 32, 32, 0.85)'" : "'rgba(250, 250, 250, 0.85)'"}
+  const border = ${dark ? "'rgba(255, 255, 255, 0.1)'" : "'rgba(0, 0, 0, 0.08)'"}
+  bar.style.background = background
+  bar.style.borderBottom = '1px solid ' + border
   const button = (action, label) => {
     const node = document.createElement('button')
     node.textContent = label
@@ -197,18 +194,92 @@ const TITLE_BAR_INJECTION = (dark: boolean): string => {
   close.onmouseenter = () => { close.style.background = '#e81123'; close.style.color = '#ffffff' }
   close.onmouseleave = () => { close.style.background = 'transparent'; close.style.color = '${foreground}' }
   bar.append(close)
-  document.body.prepend(bar)
   const root = document.getElementById('root')
   if (root !== null) {
     root.style.height = 'calc(100vh - 40px)'
     root.style.marginTop = '40px'
+  }`
+  // macOS: the strip container stays fully pointer-transparent, so nothing
+  // below ever loses a click. Window dragging comes from small drag segments
+  // planted only where no interactive element sits — the strip is a fixed
+  // overlay, so instead of switching app-region live (draggable regions
+  // swallow all pointer events and would freeze the switch), the segments
+  // are rebuilt from a scan whenever the page changes.
+  const dragSegments = mac ? `
+  const STRIP_HEIGHT = 40
+  const INTERACTIVE_SELECTOR = [
+    'a', 'button', 'input', 'textarea', 'select', 'label', 'summary', 'details',
+    'audio', 'video', 'iframe',
+    '[role="button"]', '[role="link"]', '[role="textbox"]', '[role="checkbox"]',
+    '[role="radio"]', '[role="switch"]', '[role="combobox"]', '[role="searchbox"]',
+    '[role="slider"]', '[role="spinbutton"]', '[role="menuitem"]', '[role="tab"]',
+    '[role="option"]', '[role="treeitem"]', '[role="gridcell"]', '[role="listbox"]',
+    '[role="dialog"]', '[role="select"]', '[contenteditable="true"]', '[contenteditable=""]',
+  ].join(',')
+  const dragSegment = (left, width) => {
+    const seg = document.createElement('div')
+    seg.className = 'dsh-dragseg'
+    seg.style.cssText = [
+      'position: fixed', 'top: 0', 'left: ' + left + 'px', 'width: ' + width + 'px',
+      'height: ' + STRIP_HEIGHT + 'px', '-webkit-app-region: drag',
+    ].join(';')
+    return seg
   }
+  const observer = new MutationObserver(() => { requestAnimationFrame(rebuildDragSegments) })
+  const rebuildDragSegments = () => {
+    observer.disconnect()
+    bar.querySelectorAll('.dsh-dragseg').forEach((seg) => { seg.remove() })
+    const width = window.innerWidth
+    const occupied = []
+    for (const el of document.querySelectorAll(INTERACTIVE_SELECTOR)) {
+      if (el.disabled || el.getAttribute('aria-disabled') === 'true') continue
+      const rect = el.getBoundingClientRect()
+      // Wide decorative plates (brand marks, header banners) read as title-bar
+      // chrome rather than controls; only narrow buttons keep their clicks.
+      if (rect.right - rect.left > 160) continue
+      if (rect.top < STRIP_HEIGHT && rect.bottom > 0 && rect.left < width && rect.right > 0) {
+        occupied.push([Math.max(0, rect.left), Math.min(width, rect.right)])
+      }
+    }
+    occupied.sort((a, b) => a[0] - b[0])
+    const merged = []
+    for (const [left, right] of occupied) {
+      const last = merged[merged.length - 1]
+      if (last !== undefined && left <= last[1]) last[1] = Math.max(last[1], right)
+      else merged.push([left, right])
+    }
+    let x = 0
+    for (const [left, right] of merged) {
+      if (left > x) bar.append(dragSegment(x, left - x))
+      x = Math.max(x, right)
+    }
+    if (x < width) bar.append(dragSegment(x, width - x))
+    observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true })
+  }
+  rebuildDragSegments()
+  window.addEventListener('resize', rebuildDragSegments)
+  window.addEventListener('scroll', () => { requestAnimationFrame(rebuildDragSegments) }, true)
+  window.setInterval(rebuildDragSegments, 1000)
+` : ''
+  return `(() => {
+  if (document.getElementById('dsh-titlebar') !== null) return
+  const bar = document.createElement('div')
+  bar.id = 'dsh-titlebar'
+  bar.style.cssText = [
+    'position: fixed', 'top: 0', 'left: 0', 'right: 0', 'height: 40px',
+    'display: flex', 'align-items: center', 'justify-content: flex-end',
+    'z-index: 2147483647', 'user-select: none',
+    ${mac ? "'pointer-events: none'" : "'-webkit-app-region: drag'"},
+  ].join(';')
+  ${chrome}
+  ${dragSegments}
+  document.body.prepend(bar)
 })()`
 }
 
-/** Inject the frameless title bar into the page; a no-op once present. */
+/** Inject the title bar into the page; a no-op once present. */
 function injectTitleBar(win: BrowserWindow): void {
-  void win.webContents.executeJavaScript(TITLE_BAR_INJECTION(nativeTheme.shouldUseDarkColors))
+  void win.webContents.executeJavaScript(TITLE_BAR_INJECTION(nativeTheme.shouldUseDarkColors, IS_MAC))
 }
 
 /** Route the injected title bar's window controls to this window. */

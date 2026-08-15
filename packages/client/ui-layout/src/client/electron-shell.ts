@@ -1,8 +1,8 @@
 /**
  * The desktop shell's preload bridge, present only inside the Electron shell.
  * The shell injects this through contextBridge; a plain browser has none, so
- * every consumer must treat it as optional. The layout reserves the macOS
- * traffic-light band when the platform is darwin.
+ * every consumer must treat it as optional. The shell's injected title bar
+ * calls the window controls; macOS keeps the system traffic lights.
  * @module @deepseek-ai/dsh-client-ui-layout/electron-shell
  */
 

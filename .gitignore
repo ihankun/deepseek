@@ -41,3 +41,4 @@ worktrees/
 
 # Electron desktop app packaging output
 apps/electron/release/
+.opencode

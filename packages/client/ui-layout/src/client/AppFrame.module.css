@@ -29,13 +29,6 @@
   border-right: 1px solid var(--dsw-alias-border-l1);
 }
 
-/* The desktop shell's macOS traffic lights float over the top-left corner
-   (band bottom ≈ 42px); the sidebar reserves that band so its header and the
-   collapsed rail sit below the lights. */
-.sidebarCol[data-traffic-reserve] {
-  padding-top: 15px;
-}
-
 .centerCol {
   min-width: 0;
   display: flex;
