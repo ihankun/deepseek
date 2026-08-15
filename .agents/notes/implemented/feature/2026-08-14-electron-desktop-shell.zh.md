@@ -10,7 +10,9 @@ Status: implemented
 
 ## 决策
 
-**自包含的 Electron 应用持有完整运行时。** `apps/electron`(`@deepseek-ai/dsh-electron-app`)是桌面表面触及的唯一包。主进程以 `ELECTRON_RUN_AS_NODE` 子进程启动自己的 dsh web server——开发时用检出目录的已构建 CLI(`apps/cli/lib/bin.js web --port 0`),打包时用内置 CLI(`app.asar` 内 `node_modules/@deepseek-ai/dsh/lib/bin.js web --port 0`)——从 `dsh web: http://127.0.0.1:<port>` 就绪行解析 OS 分配的 URL,并耦合两个生命周期:退出时杀服务器子进程,服务器自身退出结束应用。可选 `DSH_WEB_URL` 跳过内嵌服务器以支持外部 harness 启动。无需改动任何 profile、bundle 或 dsh CLI——`dsh web` 及其 web profile 本就存在。
+**自包含的 Electron 应用持有完整运行时。** `apps/electron`(`@deepseek-ai/dsh-electron-app`)是桌面表面触及的唯一包。主进程以 `ELECTRON_RUN_AS_NODE` 子进程启动自己的 dsh web server——开发时用检出目录的已构建 CLI(`apps/cli/lib/bin.js web --port 0`),打包时用内置 CLI——从 `dsh web: http://127.0.0.1:<port>` 就绪行解析 OS 分配的 URL,并耦合两个生命周期:退出时杀服务器子进程,服务器自身退出结束应用。可选 `DSH_WEB_URL` 跳过内嵌服务器以支持外部 harness 启动。无需改动任何 profile、bundle 或 dsh CLI——`dsh web` 及其 web profile 本就存在。
+
+**打包的服务器从磁盘解包副本运行,而非 asar。** dsh 的 `healProfilesModuleFallback` 会创建从 `$DSH_HOME/profiles/node_modules` 到安装包的符号链接;在 asar 内部,这些目标是真实文件系统无法跟随的虚拟路径,因此启动会以 MODULE_NOT_FOUND 失败。主进程因此把内置 `node_modules` 按应用版本从 asar 复制到 `userData/runtime/<version>/`(临时目录加原子重命名),并从磁盘副本启动服务器。electron-builder 的依赖收集还会漏掉 pnpm workspace 的 peerDependencies(仅 `@deepseek-ai/dsh-invariants` 就被 166 个包依赖),因此运行时所需的每个包都显式声明在 `apps/electron` 的 dependencies 中。
 
 **窗口隐藏系统标题栏。** macOS 在内容上方保留红绿灯(`titleBarStyle: 'hidden'`、`trafficLightPosition`),win/linux 使用无边框窗口,由主进程向页面注入标题栏(拖拽区;最小化/最大化/关闭按钮按系统模式配色)。按钮经 `dshWindow` preload 桥(`src/preload.mts`,以 ESM `.mjs` 形式发布;路径从主入口自身位置推导,因为 dev 模式下 `app.getAppPath()` 返回入口目录而非包根)路由到主进程。当桥报告 `darwin` 时,web 布局(ui-layout 的 `AppFrame`)预留红绿灯区域。
 

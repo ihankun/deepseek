@@ -10,9 +10,8 @@
  * `dsh --profile tui --resume abc` boots the tui profile with `--resume abc`,
  * and `dsh --profile web -h` prints the web app's help, not this one's.
  *
- * `web` and `electron` are hardcoded aliases for `--profile web` and
- * `--profile electron`; `plugin` manages a profile's plugin dependencies by
- * forwarding to pnpm.
+ * `web` is a hardcoded alias for `--profile web`; `plugin` manages a profile's
+ * plugin dependencies by forwarding to pnpm.
  * @module @deepseek-ai/dsh/args
  */
 
@@ -48,7 +47,7 @@ interface PluginInvocation {
 /** The resolved `dsh` invocation. Help, version, and errors exit inside {@link parseDshArgs}. */
 export type DshInvocation = ProfileInvocation | DumpConfigInvocation | PluginInvocation
 
-/** Launcher flags shared by the default command and the `web`/`electron` aliases. */
+/** Launcher flags shared by the default command and the `web` alias. */
 interface BootOptions {
   patch?: string[]
   dumpConfig?: boolean
@@ -65,7 +64,6 @@ const collect = (value: string, previous: string[] = []): string[] => [...previo
 const HELP_EXAMPLES = `
 Examples:
   dsh --profile web                          boot the web profile (same as: dsh web)
-  dsh --profile electron                     boot the desktop shell (same as: dsh electron)
   dsh --profile headless "run the tests"     answer one task, print the result, and exit
   dsh --profile tui --patch ./extra.yml      boot a custom profile with one extra overlay
   dsh --profile tui --resume <session>       arguments after the launcher flags reach the app
@@ -76,7 +74,7 @@ Examples:
 /**
  * Resolve a boot or dump invocation from the launcher flags and the leftover
  * inner arguments.
- * @param program - the command whose options were parsed (the root, or the `web`/`electron` alias).
+ * @param program - the command whose options were parsed (the root, or the `web` alias).
  * @param profile - the profile these flags boot.
  * @param options - the launcher flags commander collected.
  * @param args - the leftover arguments, in argv order.
@@ -168,24 +166,6 @@ export function parseDshArgs(argv: readonly string[], version: string): DshInvoc
     .action((args: string[], options: BootOptions) => {
       rejectParentOptions('web')
       resolved = resolveBoot(web, 'web', options, args)
-    })
-
-  // The desktop shell boots the electron profile, whose composition stacks the
-  // web bundle plus the electron bundle; the web app's flag family applies, so
-  // the alias mirrors `web` exactly.
-  const electron = program.command('electron').description('boot the desktop shell (alias of --profile electron); the web app\'s own flags follow')
-  electron
-    .helpOption(false)
-    .allowUnknownOption()
-    .passThroughOptions()
-    .enablePositionalOptions()
-    .argument('[args...]', 'arguments for the web app inside the shell (see: dsh electron --help)')
-    .option('--patch <path>', 'extra patch-list overlay applied after the profile layer (repeatable)', collect)
-    .option('--dump-config', 'print the composed electron-profile tree (with the user layer and any --patch) and exit')
-    .option('--dump-default-config', 'print the electron profile\'s bundle layers (no user layer) and exit')
-    .action((args: string[], options: BootOptions) => {
-      rejectParentOptions('electron')
-      resolved = resolveBoot(electron, 'electron', options, args)
     })
 
   const plugin = program.command('plugin').description('manage a profile\'s plugins by forwarding the remaining arguments to pnpm in the profile directory')

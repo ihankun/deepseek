@@ -8,7 +8,7 @@ The desktop app: an Electron shell that runs the dsh web surface in a window wit
 
 The main process starts the server as an `ELECTRON_RUN_AS_NODE` child:
 
-- **Packaged app**: the bundled CLI (`node_modules/@deepseek-ai/dsh/lib/bin.js web --port 0` inside the asar).
+- **Packaged app**: the bundled CLI (`node_modules/@deepseek-ai/dsh/lib/bin.js web --port 0`), materialized once from the asar into `~/Library/Application Support/DeepSeek/runtime/<version>/` — dsh's profile fallback heals symlinks that must point at real filesystem paths, which asar-internal targets cannot be.
 - **Dev launch** (`pnpm run electron:dev`): the checkout's built CLI (`apps/cli/lib/bin.js web --port 0`).
 
 The server's stderr forwards to the app's, and the URL comes from the `dsh web: http://127.0.0.1:<port>` readiness line. The main process probes the URL until it answers, opens the window, sets the dock icon, and shows the `deepseek-tray` tray icon with show/exit actions. Closing the window quits the app on every platform; quitting kills the server child and the server's own exit quits the app. An optional `DSH_WEB_URL` environment value skips the embedded server (external-harness launch).

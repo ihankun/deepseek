@@ -272,8 +272,7 @@
         "./packages/identity/*/src",
         "./packages/test-support/*/src",
         "./packages/host/*/src",
-        "./packages/client/*/src",
-        "./apps/*/src"
+        "./packages/client/*/src"
       ]
     }
   }

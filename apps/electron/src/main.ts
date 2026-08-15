@@ -17,6 +17,8 @@
 
 import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, nativeTheme } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
+import { existsSync } from 'node:fs'
+import { copyFile, mkdir, readdir, rename } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { serverUrlFromLine } from './server-url.ts'
@@ -229,14 +231,44 @@ async function waitForServer(url: string): Promise<void> {
 }
 
 /**
- * The dsh CLI entry this app starts its server from: the packaged app's
- * bundled node_modules in an asar, or the checkout's built apps/cli from a
- * dev launch (this entry sits at apps/electron/lib/main.js).
+ * The dsh CLI entry this app starts its server from: the materialized runtime
+ * copy of the bundled node_modules in a packaged app, or the checkout's built
+ * apps/cli from a dev launch (this entry sits at apps/electron/lib/main.js).
  */
 function embeddedDshEntry(): string {
   return app.isPackaged
-    ? join(app.getAppPath(), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
-    : join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'apps', 'cli', 'lib', 'bin.js')
+    ? join(RUNTIME_NODE_MODULES, '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+    : join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'apps', 'cli', 'lib', 'bin.js')
+}
+
+/** Where the packaged runtime lands on disk, keyed by app version. */
+const RUNTIME_NODE_MODULES = join(app.getPath('userData'), 'runtime', app.getVersion(), 'node_modules')
+
+/** Recursively copy one directory tree (asar reads resolve unpacked stubs). */
+async function copyDir(src: string, dst: string): Promise<void> {
+  await mkdir(dst, { recursive: true })
+  for (const entry of await readdir(src, { withFileTypes: true })) {
+    const source = join(src, entry.name)
+    const target = join(dst, entry.name)
+    if (entry.isDirectory()) await copyDir(source, target)
+    else await copyFile(source, target)
+  }
+}
+
+/**
+ * Materialize the bundled node_modules onto disk. dsh's profile fallback
+ * heals symlinks that point at the installation; inside an asar those targets
+ * do not exist on the real filesystem, so the server must run from a disk
+ * copy. Cached per app version; the copy lands in a temp dir and renames into
+ * place so an interrupted first run never leaves a partial tree.
+ */
+async function ensureRuntimeCopy(): Promise<void> {
+  if (existsSync(RUNTIME_NODE_MODULES)) return
+  const startedAt = Date.now()
+  const staging = `${RUNTIME_NODE_MODULES}.tmp`
+  await copyDir(join(app.getAppPath(), 'node_modules'), staging)
+  await rename(staging, RUNTIME_NODE_MODULES)
+  console.error(`electron: materialized runtime in ${Date.now() - startedAt}ms`)
 }
 
 /**
@@ -253,9 +285,17 @@ function startEmbeddedServer(): Promise<string> {
   serverProcess = child
   child.stderr.pipe(process.stderr)
   let stdout = ''
+  let stderr = ''
+  child.stderr.on('data', (chunk: Buffer) => { stderr += chunk.toString() })
   return new Promise<string>((resolve, reject) => {
+    // Failures before the window exists have no console; the tail of the
+    // server's stderr is what fatal() shows in the error dialog.
+    const failureDetail = (reason: string): string => {
+      const tail = stderr.trim().split('\n').slice(-12).join('\n')
+      return `${reason}${tail === '' ? '' : `\n\n${tail}`}`
+    }
     const deadline = setTimeout(() => {
-      reject(new Error(`dsh server did not become ready within ${READY_TIMEOUT_MS}ms`))
+      reject(new Error(failureDetail(`dsh server did not become ready within ${READY_TIMEOUT_MS}ms`)))
       child.kill()
     }, READY_TIMEOUT_MS)
     child.stdout.on('data', (chunk: Buffer) => {
@@ -268,7 +308,7 @@ function startEmbeddedServer(): Promise<string> {
     })
     child.on('exit', (code) => {
       clearTimeout(deadline)
-      reject(new Error(`dsh server exited with code ${String(code)} before becoming ready`))
+      reject(new Error(failureDetail(`dsh server exited with code ${String(code)} before becoming ready`)))
     })
   })
 }
@@ -289,6 +329,7 @@ if (!app.requestSingleInstanceLock()) {
     let url = webUrl
     if (url === undefined) {
       try {
+        if (app.isPackaged) await ensureRuntimeCopy()
         url = await startEmbeddedServer()
       } catch (error) {
         fatal(error instanceof Error ? error.message : String(error))
@@ -305,5 +346,10 @@ if (!app.requestSingleInstanceLock()) {
     // An external launcher pipes its stdin into this process; EOF means it
     // died without the teardown that would have killed us directly.
     process.stdin.on('end', () => { app.quit() })
+  }, () => {
+    // fatal has already reported the failure; this settles its throw so
+    // startup failures exit cleanly instead of lingering as an unhandled
+    // promise rejection.
+    app.exit(1)
   })
 }
