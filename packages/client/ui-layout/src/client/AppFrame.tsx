@@ -15,6 +15,7 @@ import type { ReactNode } from 'react'
 import type { PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import { computeColumns, SIDEBAR_AUTO_COLLAPSE, SIDEBAR_DEFAULT } from './columns.ts'
 import type { createLayoutStore } from './stores.ts'
+import './electron-shell.ts'
 import css from './AppFrame.module.css'
 
 /** Full composed props: runtime share + child-slot render share + store share. */
@@ -97,6 +98,10 @@ export function AppFrame({
   })
   const frameRef = useRef<HTMLDivElement | null>(null)
   const [viewport, setViewport] = useState(() => window.innerWidth)
+  // The Electron shell's macOS traffic lights float over the top-left corner;
+  // the sidebar reserves their band so its header sits below them. Read once
+  // at render: the platform is fixed for a process lifetime.
+  const macTrafficLightReserve = window.dshWindow?.platform === 'darwin'
 
   const lastSession = useRef(detailsSession)
   useLayoutEffect(() => {
@@ -170,7 +175,7 @@ export function AppFrame({
       data-details-collapsed={cols.details === 0 || undefined}
       data-dragging={dragging || undefined}
     >
-      <div className={css.sidebarCol}>
+      <div className={css.sidebarCol} data-traffic-reserve={macTrafficLightReserve || undefined}>
         {/* Render-site slot call with live concession output: a closed
             sidebar keeps the mounted slot at the compact-rail width, and the
             component sees its rendered state as owner params decided here

@@ -14,6 +14,10 @@ The bundle's patch layer inserts one row, `electron-app`, which injects the `web
 
 The main process probes the URL until the server answers, opens the window (web-app-manifest-512 icon), sets the macOS dock icon from the same asset, and shows the `deepseek-tray` tray icon with show/exit actions. Closing the window quits the app on every platform.
 
+## Window chrome
+
+The system title bar is hidden for an immersive look: macOS keeps the traffic lights over the content (`titleBarStyle: 'hidden'`), while win/linux run frameless and the main process injects a title bar into the page (drag region plus minimize/maximize/close buttons, themed by the system light/dark mode). The buttons talk to the main process through the `dshWindow` preload bridge; the injected bar pushes `#root` down by its 40px height.
+
 ## Icon assets
 
 `assets/` carries the icon resources. The tray uses `deepseek-tray.png` — a black shape on transparency, resized to the 24pt menu-bar size (48px @2x) and marked as a macOS template image, so the menu bar renders it in the current light/dark color automatically. The window and dock icon is the single `icon.png`, matched to the DeepSeek desktop client icon: a dark-gray rounded rect inset 9% per side (the Apple icon-template proportion, so the tile matches the visual weight of neighboring apps) with the macOS standard corner radius (22.5%, which the system would otherwise overlay on installed apps) and the logo rendered white from the blue logo's alpha shape. It is generated from the shipped `web-app-manifest-512x512.png` logo by `pnpm --filter @deepseek-ai/dsh-electron-app run gen:icons` (script at `scripts/gen-electron-icons.ts`, needs the `sharp` devDependency). Swap the source files in place and re-run the generator to rebrand.

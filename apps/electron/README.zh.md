@@ -14,6 +14,10 @@ bundle 的补丁层只插入一行 `electron-app`,注入 `webServer` 服务。we
 
 主进程轮询 URL 直到服务器响应,打开窗口(web-app-manifest-512 图标),用同一资源设置 macOS dock 图标,并显示带「显示/退出」操作的 `deepseek-tray` 托盘图标。关闭窗口会在所有平台退出应用。
 
+## 窗口装饰
+
+系统标题栏被隐藏以获得沉浸式观感:macOS 在内容上方保留红绿灯(`titleBarStyle: 'hidden'`),win/linux 使用无边框窗口,由主进程向页面注入标题栏(拖拽区加最小化/最大化/关闭按钮,按系统浅色/深色模式配色)。按钮通过 `dshWindow` preload 桥与主进程通信;注入的标题栏会把 `#root` 往下推 40px。
+
 ## 图标资源
 
 `assets/` 存放图标资源。托盘使用 `deepseek-tray.png`——透明底的黑色形状,缩放到菜单栏规范的 24pt(2x 为 48px)并标记为 macOS template image,菜单栏会自动按当前浅色/深色渲染。窗口与 dock 图标为单一的 `icon.png`,对齐 DeepSeek 桌面客户端图标:深灰圆角矩形、四周内缩 9%(Apple 图标模板比例,使 dock 上的视觉重量与其他应用一致),圆角为系统标准 22.5%(即系统对已安装应用叠加的遮罩角度),logo 由蓝色 logo 的 alpha 形状渲染为白色。由 `pnpm --filter @deepseek-ai/dsh-electron-app run gen:icons` 从内置的 `web-app-manifest-512x512.png` logo 生成(脚本在 `scripts/gen-electron-icons.ts`,需要 `sharp` devDependency)。原位替换源文件并重新运行生成器即可换肤。

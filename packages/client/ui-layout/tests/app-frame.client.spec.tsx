@@ -142,6 +142,15 @@ describe('AppFrame', () => {
     expect(tracks(frame)).toEqual([280, 0])
   })
 
+  it('reserves the macOS traffic-light band only under the darwin shell', () => {
+    const plain = mountFrame()
+    expect(plain.frame.querySelector('[data-traffic-reserve]')).toBeNull()
+    window.dshWindow = { platform: 'darwin', minimize: () => {}, toggleMaximize: () => {}, close: () => {} }
+    const shell = mountFrame()
+    expect(shell.frame.querySelector('[data-traffic-reserve]')).not.toBeNull()
+    delete window.dshWindow
+  })
+
   it('renders the session pair with empty owner shares (sessionId is framework-standard)', () => {
     const { slotCalls, getByTestId } = mountFrame()
     expect(getByTestId('center-content')).toBeTruthy()

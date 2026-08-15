@@ -15,9 +15,9 @@
  * @module @deepseek-ai/dsh-electron-app/main
  */
 
-import { app, BrowserWindow, Menu, Tray, dialog, nativeImage } from 'electron'
+import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, nativeTheme } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { serverUrlFromLine } from './server-url.ts'
 
@@ -25,6 +25,16 @@ const ASSET_DIR = fileURLToPath(new URL('../assets/', import.meta.url))
 
 /** The web server URL a harness launcher composed, read from the environment. */
 const webUrl = process.env.DSH_WEB_URL
+
+/** The platform the app runs on; macOS keeps system traffic lights. */
+const IS_MAC = process.platform === 'darwin'
+
+/**
+ * The preload bridge exposing window controls to the injected title bar.
+ * Derived from this entry's own location (lib/ in dev and in the packaged
+ * asar), so it never depends on the process working directory or app path.
+ */
+const PRELOAD = join(dirname(fileURLToPath(import.meta.url)), 'types', 'preload.mjs')
 
 /** The app icon shown in the dock and on the window: white rounded-rect with the logo. */
 const APP_ICON = join(ASSET_DIR, 'icon.png')
@@ -67,9 +77,29 @@ function showMainWindow(): void {
       title: 'DeepSeek Harness',
       icon: APP_ICON,
       autoHideMenuBar: true,
+      // No system title bar: macOS keeps the traffic lights over the content
+      // (hidden style), win/linux go fully frameless and get the injected
+      // title bar with its own window controls.
+      ...(IS_MAC
+        ? { titleBarStyle: 'hidden' as const, trafficLightPosition: { x: 14, y: 14 } }
+        : { frame: false }),
+      webPreferences: {
+        preload: PRELOAD,
+        sandbox: false,
+      },
     })
     mainWindow.on('closed', () => { mainWindow = undefined })
     void mainWindow.loadURL(activeUrl)
+    // The page layout reads window.dshWindow (the macOS traffic-light
+    // reservation); a failed preload silently breaks that, so report it.
+    mainWindow.webContents.on('preload-error', (_, preloadPath, error) => {
+      console.error(`electron: preload failed to load ${preloadPath}: ${error.message}`)
+    })
+    if (!IS_MAC) {
+      mainWindow.webContents.on('did-finish-load', () => {
+        if (mainWindow !== undefined) injectTitleBar(mainWindow)
+      })
+    }
     return
   }
   if (mainWindow.isMinimized()) mainWindow.restore()
@@ -110,6 +140,76 @@ function createTray(): void {
   ]))
   tray.on('click', showMainWindow)
 }
+
+/** The frameless title bar injected into the page on win/linux, as a script. */
+const TITLE_BAR_INJECTION = (dark: boolean): string => {
+  const background = dark ? 'rgba(32, 32, 32, 0.85)' : 'rgba(250, 250, 250, 0.85)'
+  const foreground = dark ? '#e8e8e8' : '#1a1a1a'
+  const hover = dark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'
+  const border = dark ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.08)'
+  return `(() => {
+  if (document.getElementById('dsh-titlebar') !== null) return
+  const bar = document.createElement('div')
+  bar.id = 'dsh-titlebar'
+  bar.style.cssText = [
+    'position: fixed', 'top: 0', 'left: 0', 'right: 0', 'height: 40px',
+    'display: flex', 'align-items: center', 'justify-content: flex-end',
+    'z-index: 2147483647', '-webkit-app-region: drag', 'user-select: none',
+    'background: ${background}', 'border-bottom: 1px solid ${border}',
+  ].join(';')
+  const button = (action, label) => {
+    const node = document.createElement('button')
+    node.textContent = label
+    node.style.cssText = [
+      'width: 46px', 'height: 100%', 'border: none', 'background: transparent',
+      'color: ${foreground}', 'font-size: 13px', 'cursor: default', 'outline: none',
+      '-webkit-app-region: no-drag', 'display: flex', 'align-items: center',
+      'justify-content: center',
+    ].join(';')
+    node.onmouseenter = () => { node.style.background = '${hover}' }
+    node.onmouseleave = () => { node.style.background = 'transparent' }
+    node.onclick = () => { window.dshWindow[action]() }
+    return node
+  }
+  bar.append(button('minimize', '\\u2500'))
+  bar.append(button('toggleMaximize', '\\u25A1'))
+  const close = button('close', '\\u2715')
+  close.onmouseenter = () => { close.style.background = '#e81123'; close.style.color = '#ffffff' }
+  close.onmouseleave = () => { close.style.background = 'transparent'; close.style.color = '${foreground}' }
+  bar.append(close)
+  document.body.prepend(bar)
+  const root = document.getElementById('root')
+  if (root !== null) {
+    root.style.height = 'calc(100vh - 40px)'
+    root.style.marginTop = '40px'
+  }
+})()`
+}
+
+/** Inject the frameless title bar into the page; a no-op once present. */
+function injectTitleBar(win: BrowserWindow): void {
+  void win.webContents.executeJavaScript(TITLE_BAR_INJECTION(nativeTheme.shouldUseDarkColors))
+}
+
+/** Route the injected title bar's window controls to this window. */
+ipcMain.on('dsh-window-control', (event, action: unknown) => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (win === null) return
+  switch (action) {
+    case 'minimize':
+      win.minimize()
+      break
+    case 'toggle-maximize':
+      if (win.isMaximized()) win.unmaximize()
+      else win.maximize()
+      break
+    case 'close':
+      win.close()
+      break
+    default:
+      void win.webContents.executeJavaScript(`console.warn('dsh title bar: unknown window control', ${JSON.stringify(action)})`)
+  }
+})
 
 /** Wait until the web server answers, so the window never opens on an error page. */
 async function waitForServer(url: string): Promise<void> {
