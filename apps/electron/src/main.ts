@@ -97,6 +97,14 @@ function showMainWindow(): void {
     mainWindow.webContents.on('preload-error', (_, preloadPath, error) => {
       console.error(`electron: preload failed to load ${preloadPath}: ${error.message}`)
     })
+    // A blank window is a renderer failure with no visible console; forward
+    // the page's console and load failures to stderr for diagnosis.
+    mainWindow.webContents.on('console-message', (event) => {
+      console.error(`electron: [renderer:${event.level}] ${event.message}`)
+    })
+    mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+      console.error(`electron: page load failed (${errorCode}) ${errorDescription} at ${validatedURL}`)
+    })
     if (!IS_MAC) {
       mainWindow.webContents.on('did-finish-load', () => {
         if (mainWindow !== undefined) injectTitleBar(mainWindow)
