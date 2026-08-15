@@ -113,6 +113,9 @@ export function resolveProfileDir(name: string, home: string = resolveDshHome())
 /** The shipped profile templates auto-initialized on first use, by name. */
 export const PROFILE_TEMPLATES: Record<string, readonly string[]> = {
   web: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'],
+  // The desktop shell stacks the electron bundle over the web layer, so one
+  // composition serves both surfaces.
+  electron: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', '@deepseek-ai/dsh-electron-app'],
   headless: ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-headless'],
 }
 

@@ -1,0 +1,93 @@
+{
+  "name": "@deepseek-ai/dsh-electron-app",
+  "description": "The dsh desktop bundle: an Electron shell hosting the web profile's server and GUI",
+  "version": "0.0.1",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "apps/electron"
+  },
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./main": {
+      "types": "./lib/types/main.d.ts",
+      "default": "./lib/main.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./src/*": "./src/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib/index.js",
+    "lib/main.js",
+    "cordis.patch.yml",
+    "assets",
+    "lib/types/**/*.d.ts"
+  ],
+  "license": "MIT",
+  "author": "DeepSeek",
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "gen:icons": "node --import tsx/esm scripts/gen-electron-icons.ts"
+  },
+  "dependencies": {
+    "@deepseek-ai/dsh": "workspace:^",
+    "@deepseek-ai/dsh-host-webserver": "workspace:^"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-cmdline": "workspace:^"
+  },
+  "devDependencies": {
+    "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-cmdline": "workspace:^",
+    "@types/node": "^22.0.0",
+    "electron": "^37.0.0",
+    "electron-builder": "^26.0.0",
+    "sharp": "^0.35.3",
+    "typescript": "^6.0.3"
+  },
+  "build": {
+    "appId": "ai.deepseek.harness",
+    "productName": "DeepSeek",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "lib/**/*",
+      "assets/**/*",
+      "cordis.patch.yml",
+      "package.json"
+    ],
+    "npmRebuild": false,
+    "mac": {
+      "icon": "assets/icon.png",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "icon": "assets/icon.png",
+      "target": [
+        "nsis"
+      ],
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    }
+  }
+}

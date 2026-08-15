@@ -1,0 +1,10 @@
+# The dsh-electron-app bundle patch: the desktop shell over the web layer.
+# Applied after dsh-web-app's insert in the electron profile's bundle order
+# (dsh-base, dsh-web-app, dsh-electron-app), so the webserver, the web runtime,
+# the /api gateway, and the browser roster are already present when the shell
+# row mounts. The row launches the Electron main process against the bound
+# server URL and mirrors the two lifetimes; it needs no config of its own.
+- insert:
+    - id: electron-app
+      name: '@deepseek-ai/dsh-electron-app'
+      inject: [webServer]
