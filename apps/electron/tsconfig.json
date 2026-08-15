@@ -7,15 +7,5 @@
   "include": [
     "src"
   ],
-  "references": [
-    {
-      "path": "../../vendor/cordis"
-    },
-    {
-      "path": "../../packages/boot/cmdline"
-    },
-    {
-      "path": "../../packages/host/webserver"
-    }
-  ]
+  "references": []
 }

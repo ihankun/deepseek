@@ -56,9 +56,9 @@ const appPackageFiles: Readonly<Record<string, readonly string[]>> = {
   // The Web build emits sourcemaps for browser debugging; publishing them is
   // what the payload policy forbids, so the bundle ships without them.
   '@deepseek-ai/dsh-web-frontend': ['dist', '!dist/**/*.map'],
-  // The desktop bundle ships both built entries (host plugin + Electron main),
-  // its patch layer, and the icon assets the main process loads.
-  '@deepseek-ai/dsh-electron-app': ['lib/index.js', 'lib/main.js', 'cordis.patch.yml', 'assets', 'lib/types/**/*.d.ts'],
+  // The desktop app ships its main entry, the preload bridge, and the icon
+  // assets the main process loads.
+  '@deepseek-ai/dsh-electron-app': ['lib/main.js', 'lib/types/preload.mjs', 'assets', 'lib/types/**/*.d.ts'],
 }
 
 /** The subset of package.json fields this constraint check cares about. */

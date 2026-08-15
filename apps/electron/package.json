@@ -1,6 +1,6 @@
 {
   "name": "@deepseek-ai/dsh-electron-app",
-  "description": "The dsh desktop bundle: an Electron shell hosting the web profile's server and GUI",
+  "description": "The dsh desktop app: an Electron shell running the dsh web server and GUI in a window",
   "version": "0.0.1",
   "publishConfig": {
     "access": "public"
@@ -11,51 +11,27 @@
     "directory": "apps/electron"
   },
   "type": "module",
-  "main": "lib/index.js",
-  "types": "lib/types/index.d.ts",
+  "main": "lib/main.js",
   "exports": {
-    ".": {
-      "types": "./lib/types/index.d.ts",
-      "default": "./lib/index.js"
-    },
-    "./main": {
-      "types": "./lib/types/main.d.ts",
-      "default": "./lib/main.js"
-    },
-    "./cordis.patch.yml": "./cordis.patch.yml",
-    "./src/*": "./src/*",
     "./package.json": "./package.json"
   },
   "files": [
-    "lib/index.js",
     "lib/main.js",
-    "cordis.patch.yml",
+    "lib/types/preload.mjs",
     "assets",
     "lib/types/**/*.d.ts"
   ],
   "license": "MIT",
   "author": "DeepSeek",
-  "dsh": {
-    "bundle": {
-      "patch": "./cordis.patch.yml"
-    }
-  },
   "scripts": {
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
     "gen:icons": "node --import tsx/esm scripts/gen-electron-icons.ts"
   },
   "dependencies": {
-    "@deepseek-ai/dsh": "workspace:^",
-    "@deepseek-ai/dsh-host-webserver": "workspace:^"
-  },
-  "peerDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-cmdline": "workspace:^"
+    "@deepseek-ai/dsh": "workspace:^"
   },
   "devDependencies": {
-    "@deepseek-ai/cordis": "workspace:^",
-    "@deepseek-ai/dsh-cmdline": "workspace:^",
     "@types/node": "^22.0.0",
     "electron": "^37.0.0",
     "electron-builder": "^26.0.0",
@@ -71,7 +47,6 @@
     "files": [
       "lib/**/*",
       "assets/**/*",
-      "cordis.patch.yml",
       "package.json"
     ],
     "npmRebuild": false,

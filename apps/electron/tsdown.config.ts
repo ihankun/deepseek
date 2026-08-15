@@ -1,13 +1,12 @@
 import { defineConfig } from 'tsdown'
 
 /**
- * The desktop bundle ships two built entries: the host plugin the Loader
- * mounts and the Electron main process the plugin launches. The root tsdown
- * workspace build's default entry glob (`lib/types/{index,invariant,startup}.js`)
- * matches only the former, so this override names both.
+ * The desktop app's main entry. The root tsdown workspace build's default
+ * entry glob (`lib/types/{index,invariant,startup}.js`) matches nothing here,
+ * so this override names it.
  */
 export default defineConfig({
-  entry: ['lib/types/index.js', 'lib/types/main.js'],
+  entry: ['lib/types/main.js'],
   outDir: 'lib',
   format: ['esm'],
   platform: 'node',

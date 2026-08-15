@@ -228,15 +228,21 @@ async function waitForServer(url: string): Promise<void> {
   }
 }
 
-/** The dsh CLI entry inside this packaged app, read from the bundled node_modules. */
+/**
+ * The dsh CLI entry this app starts its server from: the packaged app's
+ * bundled node_modules in an asar, or the checkout's built apps/cli from a
+ * dev launch (this entry sits at apps/electron/lib/main.js).
+ */
 function embeddedDshEntry(): string {
-  return join(app.getAppPath(), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+  return app.isPackaged
+    ? join(app.getAppPath(), 'node_modules', '@deepseek-ai', 'dsh', 'lib', 'bin.js')
+    : join(dirname(fileURLToPath(import.meta.url)), '..', '..', 'apps', 'cli', 'lib', 'bin.js')
 }
 
 /**
- * Start the packaged app's own dsh web server: an `ELECTRON_RUN_AS_NODE` child
- * running the bundled CLI with an OS-assigned port, and wait for the readiness
- * line that names the URL. The server's stderr forwards to this process's.
+ * Start the app's own dsh web server: an `ELECTRON_RUN_AS_NODE` child running
+ * the CLI with an OS-assigned port, and wait for the readiness line that names
+ * the URL. The server's stderr forwards to this process's.
  * @returns the loopback URL once the server is up.
  */
 function startEmbeddedServer(): Promise<string> {
@@ -279,11 +285,9 @@ if (!app.requestSingleInstanceLock()) {
     if (serverProcess?.exitCode === null) serverProcess.kill()
   })
   void app.whenReady().then(async () => {
+    // No external harness URL: start this app's own server, dev or packaged.
     let url = webUrl
     if (url === undefined) {
-      if (!app.isPackaged) {
-        fatal('DSH_WEB_URL is not set; launch through the dsh electron profile')
-      }
       try {
         url = await startEmbeddedServer()
       } catch (error) {
@@ -298,9 +302,8 @@ if (!app.requestSingleInstanceLock()) {
     }
     showMainWindow()
     createTray()
-    // In the harness mode the launcher pipes its stdin into this process; EOF
-    // means the launcher died without the tree teardown that would have
-    // killed us directly. The packaged mode ignores stdin.
+    // An external launcher pipes its stdin into this process; EOF means it
+    // died without the teardown that would have killed us directly.
     process.stdin.on('end', () => { app.quit() })
   })
 }
