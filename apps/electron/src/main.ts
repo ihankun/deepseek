@@ -65,6 +65,9 @@ let mainWindow: BrowserWindow | undefined
 let tray: Tray | undefined
 let serverProcess: ChildProcess | undefined
 
+/** Whether a real quit is in progress; only then does closing the window destroy it. */
+let quitting = false
+
 /** The URL the window loads, resolved before the window opens. */
 let activeUrl = ''
 
@@ -91,6 +94,13 @@ function showMainWindow(): void {
       },
     })
     mainWindow.on('closed', () => { mainWindow = undefined })
+    // Closing the window hides the app to the tray; the tray menu (or Cmd+Q)
+    // is the real exit path. A quit in progress lets the close through.
+    mainWindow.on('close', (event) => {
+      if (quitting) return
+      event.preventDefault()
+      mainWindow?.hide()
+    })
     void mainWindow.loadURL(activeUrl)
     // The page layout reads window.dshWindow (the macOS traffic-light
     // reservation); a failed preload silently breaks that, so report it.
@@ -326,9 +336,14 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on('second-instance', showMainWindow)
   app.on('activate', showMainWindow)
+  // Closing the window hides it instead of quitting, so this only ever fires
+  // during a real quit (when the window's close is let through); quitting
+  // again is a no-op.
   app.on('window-all-closed', () => { app.quit() })
-  // The embedded server must not outlive its window: quitting kills it, and
-  // its own exit quits the app (the readiness handler already settled).
+  // A real quit is the only path that destroys the window.
+  app.on('before-quit', () => { quitting = true })
+  // The embedded server must not outlive the app: quitting kills it, and its
+  // own exit quits the app (the readiness handler already settled).
   app.on('before-quit', () => {
     if (serverProcess?.exitCode === null) serverProcess.kill()
   })
