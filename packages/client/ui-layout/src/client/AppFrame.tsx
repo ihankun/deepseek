@@ -98,6 +98,11 @@ export function AppFrame({
   })
   const frameRef = useRef<HTMLDivElement | null>(null)
   const [viewport, setViewport] = useState(() => window.innerWidth)
+  // The Electron shell's macOS traffic lights float over the top-left corner;
+  // the sidebar reserves their band so its header sits below them. Read once
+  // at render: the platform is fixed for a process lifetime.
+  // Platform detection is provided by the Electron plugin when available.
+  const macTrafficLightReserve = window.dshWindow?.platform === 'darwin'
 
   const lastSession = useRef(detailsSession)
   useLayoutEffect(() => {
@@ -171,7 +176,7 @@ export function AppFrame({
       data-details-collapsed={cols.details === 0 || undefined}
       data-dragging={dragging || undefined}
     >
-      <div className={css.sidebarCol}>
+      <div className={css.sidebarCol} data-traffic-reserve={macTrafficLightReserve || undefined}>
         {/* Render-site slot call with live concession output: a closed
             sidebar keeps the mounted slot at the compact-rail width, and the
             component sees its rendered state as owner params decided here

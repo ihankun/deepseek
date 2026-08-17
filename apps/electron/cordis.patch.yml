@@ -1,0 +1,6 @@
+# Electron-specific patch: loads the Electron UI adaptations plugin.
+# Applied after the web-app bundle; rows here override web-app rows by id.
+
+- insert:
+    - id: ui-electron
+      name: '@deepseek-ai/dsh-client-ui-electron'
