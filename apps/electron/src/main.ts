@@ -41,6 +41,14 @@ const PRELOAD = join(dirname(fileURLToPath(import.meta.url)), 'types', 'preload.
 /** The app icon shown in the dock and on the window: white rounded-rect with the logo. */
 const APP_ICON = join(ASSET_DIR, 'icon.png')
 
+/** The denser Windows/Linux window icon: the same mark nearly filling the
+ * tile, so the taskbar button reads larger than the macOS dock layout. */
+const WINDOW_ICON = join(ASSET_DIR, 'icon-win.png')
+
+/** The Windows window icon as a multi-resolution .ico, so the taskbar and
+ * Alt-Tab pick exact sizes instead of downscaling a single PNG. */
+const WINDOW_ICON_ICO = join(ASSET_DIR, 'icon-win.ico')
+
 /** The black-shape tray source; template rendering picks up the menu bar color. */
 const TRAY_ICON = join(ASSET_DIR, 'deepseek-tray.png')
 
@@ -80,7 +88,7 @@ function showMainWindow(): void {
       minWidth: 800,
       minHeight: 600,
       title: 'DeepSeek Harness',
-      icon: APP_ICON,
+      icon: IS_MAC ? APP_ICON : (process.platform === 'win32' ? WINDOW_ICON_ICO : WINDOW_ICON),
       autoHideMenuBar: true,
       // No system title bar: macOS keeps the traffic lights over the injected
       // drag strip (hidden style), win/linux go fully frameless and get the
@@ -94,6 +102,9 @@ function showMainWindow(): void {
       },
     })
     mainWindow.on('closed', () => { mainWindow = undefined })
+    // Keep the injected title bar's restore icon in sync with the window state.
+    mainWindow.on('maximize', () => { mainWindow?.webContents.send('dsh-window-maximize-state', true) })
+    mainWindow.on('unmaximize', () => { mainWindow?.webContents.send('dsh-window-maximize-state', false) })
     // Closing the window hides the app to the tray; the tray menu (or Cmd+Q)
     // is the real exit path. A quit in progress lets the close through.
     mainWindow.on('close', (event) => {
@@ -161,44 +172,68 @@ function createTray(): void {
 
 /**
  * The title bar injected into the page, as a script. win/linux get a visible
- * strip with window controls and the content pushed below it; macOS gets a
- * fully transparent strip that leaves the layout untouched — the system
- * traffic lights already float over it, and only strip areas with nothing
- * interactive below drag the window.
+ * in-flow strip (SVG window controls, theme-matched background) with the
+ * content sized below it; macOS gets a fully transparent overlay that leaves
+ * the layout untouched — the system traffic lights already float over it, and
+ * only strip areas with nothing interactive below drag the window.
  */
 const TITLE_BAR_INJECTION = (dark: boolean, mac: boolean): string => {
   const foreground = dark ? '#e8e8e8' : '#1a1a1a'
-  const hover = dark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(0, 0, 0, 0.08)'
+  const hover = dark ? 'rgba(255, 255, 255, 0.10)' : 'rgba(0, 0, 0, 0.06)'
+  const minimizeIcon = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><line x1="2" y1="6" x2="10" y2="6" stroke="currentColor" stroke-width="1.2"/></svg>'
+  const maximizeIcon = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="2" y="2" width="8" height="8" stroke="currentColor" stroke-width="1.2" fill="none"/></svg>'
+  const restoreIcon = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><rect x="2.5" y="3" width="6" height="6" stroke="currentColor" stroke-width="1.2" fill="none"/><line x1="2.5" y1="3.5" x2="2.5" y2="1.5" stroke="currentColor" stroke-width="1.2"/><line x1="2.5" y1="1.5" x2="9.5" y2="1.5" stroke="currentColor" stroke-width="1.2"/><line x1="9.5" y1="1.5" x2="9.5" y2="3" stroke="currentColor" stroke-width="1.2"/></svg>'
+  const closeIcon = '<svg width="12" height="12" viewBox="0 0 12 12" fill="none"><line x1="2.5" y1="2.5" x2="9.5" y2="9.5" stroke="currentColor" stroke-width="1.2"/><line x1="9.5" y1="2.5" x2="2.5" y2="9.5" stroke="currentColor" stroke-width="1.2"/></svg>'
   const chrome = mac ? '' : `
-  const background = ${dark ? "'rgba(32, 32, 32, 0.85)'" : "'rgba(250, 250, 250, 0.85)'"}
-  const border = ${dark ? "'rgba(255, 255, 255, 0.1)'" : "'rgba(0, 0, 0, 0.08)'"}
-  bar.style.background = background
-  bar.style.borderBottom = '1px solid ' + border
-  const button = (action, label) => {
+  const fallback = ${dark ? "'rgb(26, 26, 28)'" : "'rgb(247, 248, 250)'"}
+  const foreground = ${JSON.stringify(foreground)}
+  const hover = ${JSON.stringify(hover)}
+  const closeHover = '#e81123'
+  // In-flow strip: the bar occupies its own 36px so the page below it never
+  // overflows (no document scrollbar) and nothing sits underneath it; sticky
+  // keeps it pinned while the app's own containers scroll. The background is
+  // the sidebar token as a var(): the theme presenter flips
+  // body[data-ds-dark-theme] at runtime, and the variable cascades to this
+  // body child, so the strip follows light/dark switches with the column.
+  bar.style.height = '36px'
+  bar.style.position = 'sticky'
+  bar.style.alignItems = 'stretch'
+  bar.style.backgroundColor = 'var(--dsw-specific-sidebar-fill, ' + fallback + ')'
+  bar.style.color = foreground
+  const control = (icon, hoverBg, onClick) => {
     const node = document.createElement('button')
-    node.textContent = label
+    node.type = 'button'
     node.style.cssText = [
-      'width: 46px', 'height: 100%', 'border: none', 'background: transparent',
-      'color: ${foreground}', 'font-size: 13px', 'cursor: default', 'outline: none',
-      '-webkit-app-region: no-drag', 'display: flex', 'align-items: center',
-      'justify-content: center',
+      'width: 46px', 'height: 100%', 'margin: 0', 'padding: 0', 'border: none',
+      'background: transparent', 'color: inherit', 'cursor: default', 'outline: none',
+      'flex-shrink: 0', 'display: flex', 'align-items: center', 'justify-content: center',
+      '-webkit-app-region: no-drag',
     ].join(';')
-    node.onmouseenter = () => { node.style.background = '${hover}' }
+    node.innerHTML = icon
+    node.onmouseenter = () => { node.style.background = hoverBg }
     node.onmouseleave = () => { node.style.background = 'transparent' }
-    node.onclick = () => { window.dshWindow[action]() }
+    node.onclick = onClick
     return node
   }
-  bar.append(button('minimize', '\\u2500'))
-  bar.append(button('toggleMaximize', '\\u25A1'))
-  const close = button('close', '\\u2715')
-  close.onmouseenter = () => { close.style.background = '#e81123'; close.style.color = '#ffffff' }
-  close.onmouseleave = () => { close.style.background = 'transparent'; close.style.color = '${foreground}' }
-  bar.append(close)
+  bar.append(control(${JSON.stringify(minimizeIcon)}, hover, () => { window.dshWindow.minimize() }))
+  const maxBtn = control(${JSON.stringify(maximizeIcon)}, hover, () => { window.dshWindow.toggleMaximize() })
+  const setMaxIcon = (maximized) => { maxBtn.innerHTML = maximized ? ${JSON.stringify(restoreIcon)} : ${JSON.stringify(maximizeIcon)} }
+  if (typeof window.dshWindow.maximized === 'function') void window.dshWindow.maximized().then(setMaxIcon)
+  if (typeof window.dshWindow.onMaximizeStateChange === 'function') window.dshWindow.onMaximizeStateChange(setMaxIcon)
+  bar.append(maxBtn)
+  const closeBtn = control(${JSON.stringify(closeIcon)}, closeHover, () => { window.dshWindow.close() })
+  closeBtn.onmouseenter = () => { closeBtn.style.background = closeHover; closeBtn.style.color = '#ffffff' }
+  closeBtn.onmouseleave = () => { closeBtn.style.background = 'transparent'; closeBtn.style.color = foreground }
+  bar.append(closeBtn)
   const root = document.getElementById('root')
   if (root !== null) {
-    root.style.height = 'calc(100vh - 40px)'
-    root.style.marginTop = '40px'
-  }`
+    root.style.height = 'calc(100vh - 36px)'
+    root.style.boxSizing = 'border-box'
+  }
+  document.documentElement.style.height = '100%'
+  document.body.style.margin = '0'
+  document.body.style.height = '100%'
+  document.body.style.overflow = 'hidden'`
   // macOS: the strip container stays fully pointer-transparent, so nothing
   // below ever loses a click. Window dragging comes from small drag segments
   // planted only where no interactive element sits — the strip is a fixed
@@ -300,6 +335,12 @@ ipcMain.on('dsh-window-control', (event, action: unknown) => {
     default:
       void win.webContents.executeJavaScript(`console.warn('dsh title bar: unknown window control', ${JSON.stringify(action)})`)
   }
+})
+
+/** The injected title bar's restore icon needs the current maximized state. */
+ipcMain.handle('dsh-window-is-maximized', (event): boolean => {
+  const win = BrowserWindow.fromWebContents(event.sender)
+  return win?.isMaximized() ?? false
 })
 
 /** Wait until the web server answers, so the window never opens on an error page. */
@@ -419,6 +460,9 @@ if (!app.requestSingleInstanceLock()) {
     if (serverProcess?.exitCode === null) serverProcess.kill()
   })
   void app.whenReady().then(async () => {
+    // Windows keys the taskbar button off the app identity; matching the
+    // packaged appId keeps dev runs grouped under the same icon.
+    if (process.platform === 'win32') app.setAppUserModelId('ai.deepseek.harness')
     // No external harness URL: start this app's own server, dev or packaged.
     let url = webUrl
     if (url === undefined) {

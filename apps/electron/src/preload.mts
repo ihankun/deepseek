@@ -15,9 +15,17 @@ contextBridge.exposeInMainWorld('dshWindow', {
   minimize: (): void => { ipcRenderer.send('dsh-window-control', 'minimize') },
   toggleMaximize: (): void => { ipcRenderer.send('dsh-window-control', 'toggle-maximize') },
   close: (): void => { ipcRenderer.send('dsh-window-control', 'close') },
+  /** The current maximized state, so the title bar can swap its restore icon. */
+  maximized: (): Promise<boolean> => ipcRenderer.invoke('dsh-window-is-maximized'),
+  /** Subscribe to maximize-state changes pushed from the main process. */
+  onMaximizeStateChange: (listener: (maximized: boolean) => void): void => {
+    ipcRenderer.on('dsh-window-maximize-state', (_event, maximized: boolean) => { listener(maximized) })
+  },
 } satisfies Record<string, unknown> & {
   platform: NodeJS.Platform
   minimize: () => void
   toggleMaximize: () => void
   close: () => void
+  maximized: () => Promise<boolean>
+  onMaximizeStateChange: (listener: (maximized: boolean) => void) => void
 })
