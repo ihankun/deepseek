@@ -142,14 +142,12 @@ describe('AppFrame', () => {
     expect(tracks(frame)).toEqual([280, 0])
   })
 
-  it('leaves the traffic-light band to the shell title bar', () => {
-    // The desktop shell's 40px title bar owns the macOS traffic-light band,
-    // so the frame reserves nothing for it, shell or not.
+  it('reserves the macOS traffic-light band only under the darwin shell', () => {
     const plain = mountFrame()
     expect(plain.frame.querySelector('[data-traffic-reserve]')).toBeNull()
     window.dshWindow = { platform: 'darwin', minimize: () => {}, toggleMaximize: () => {}, close: () => {} }
     const shell = mountFrame()
-    expect(shell.frame.querySelector('[data-traffic-reserve]')).toBeNull()
+    expect(shell.frame.querySelector('[data-traffic-reserve]')).not.toBeNull()
     delete window.dshWindow
   })
 
