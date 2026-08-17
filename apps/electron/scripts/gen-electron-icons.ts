@@ -31,16 +31,14 @@ const MAC_CORNER_SHARE = 0.225
 /** Transparent margin around the macOS dock icon body, as a share of the side. */
 const MAC_MARGIN_SHARE = 0.09
 
-/** The Windows/Linux taskbar tile: a small corner and a thin margin, so the
- * mark nearly fills the button. */
-const WIN_CORNER_SHARE = 0.015
+/** The Windows/Linux taskbar tile: a visible corner radius and a matching
+ * margin, so the mark fills the button with properly rounded corners and
+ * nothing gets clipped at the edges. */
+const WIN_CORNER_SHARE = 0.04
 
-/** Transparent margin around the Windows/Linux tile body, as a share of the side. */
-const WIN_MARGIN_SHARE = 0.01
-
-/** The cropped source band is this multiple of the mark height, so the logo
- * keeps a thin white frame while filling most of the tile after stretching. */
-const WIN_CROP_MARK_MULTIPLE = 1.35
+/** Transparent margin around the Windows/Linux tile body, as a share of the
+ * side.  Must be at least WIN_CORNER_SHARE to avoid corner clipping. */
+const WIN_MARGIN_SHARE = 0.04
 
 /** The sizes embedded in the Windows .ico; 256 is the Vista+ PNG entry. */
 const WIN_ICO_SIZES = [16, 24, 32, 48, 64, 128, 256]
@@ -112,39 +110,90 @@ async function renderTile(marginShare: number, cornerShare: number, cropShare?: 
   return icon
 }
 
-/** Pack downscaled PNGs of the source tile into a Windows .ico container. */
-async function writeIco(source: Buffer, dest: string): Promise<void> {
-  const images: Buffer[] = []
+/**
+ * Build a Windows .ico with BMP-format entries (one per resolution).
+ * Windows renders BMP entries directly at each size — no downscaling — so
+ * the icon fills the taskbar button instead of appearing small.
+ */
+async function writeIco(sourcePng: string, dest: string): Promise<void> {
+  const entries: Buffer[] = []
+  const imageDataBuffers: Buffer[] = []
+  let offset = 6 + WIN_ICO_SIZES.length * 16
+
   for (const size of WIN_ICO_SIZES) {
-    images.push(await sharp(source).resize({ width: size, height: size }).png().toBuffer())
+    // Resize with contain + transparent background so the logo is centred
+    // without distortion; sharp raw() gives top-down RGBA.
+    const { data } = await sharp(sourcePng)
+      .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true })
+
+    // ICO DIB is bottom-up; flip rows vertically.
+    const flipped = Buffer.alloc(data.length)
+    const rowBytes = size * 4
+    for (let row = 0; row < size; row++) {
+      data.copy(flipped, (size - 1 - row) * rowBytes, row * rowBytes, (row + 1) * rowBytes)
+    }
+    // Convert RGBA → BGRA (ICO byte order).
+    for (let i = 0; i < flipped.length; i += 4) {
+      const r = flipped[i]
+      flipped[i] = flipped[i + 2]
+      flipped[i + 2] = r
+    }
+
+    // AND mask: 1 bit per pixel, rows padded to 4-byte boundary.
+    const andMaskRowBytes = Math.ceil(size / 32) * 4
+    const andMask = Buffer.alloc(andMaskRowBytes * size, 0) // all zeros — alpha handles transparency
+
+    const xorMaskSize = size * size * 4
+
+    // BITMAPINFOHEADER (40 bytes).
+    const bmp = Buffer.alloc(40)
+    bmp.writeUInt32LE(40, 0)   // header size
+    bmp.writeInt32LE(size, 4)  // width
+    bmp.writeInt32LE(size * 2, 8) // height (doubled for ICO)
+    bmp.writeUInt16LE(1, 12)   // planes
+    bmp.writeUInt16LE(32, 14)  // bits per pixel
+    bmp.writeUInt32LE(0, 16)   // compression (BI_RGB)
+    bmp.writeUInt32LE(xorMaskSize + andMask.length, 20)
+    bmp.writeUInt32LE(0, 24)   // pixels per meter X
+    bmp.writeUInt32LE(0, 28)   // pixels per meter Y
+    bmp.writeUInt32LE(0, 32)   // colors used
+    bmp.writeUInt32LE(0, 36)   // important colors
+
+    const imageData = Buffer.concat([bmp, flipped, andMask])
+
+    // Directory entry (16 bytes).
+    const dir = Buffer.alloc(16)
+    dir.writeUInt8(size < 256 ? size : 0, 0) // width
+    dir.writeUInt8(size < 256 ? size : 0, 1) // height
+    dir.writeUInt8(0, 2)  // color count
+    dir.writeUInt8(0, 3)  // reserved
+    dir.writeUInt16LE(1, 4)   // planes
+    dir.writeUInt16LE(32, 6)  // bits per pixel
+    dir.writeUInt32LE(imageData.length, 8)
+    dir.writeUInt32LE(offset, 12)
+
+    entries.push(dir)
+    imageDataBuffers.push(imageData)
+    offset += imageData.length
   }
+
   const header = Buffer.alloc(6)
-  header.writeUInt16LE(0, 0) // reserved
-  header.writeUInt16LE(1, 2) // type: icon
-  header.writeUInt16LE(images.length, 4)
-  const entries = Buffer.alloc(16 * images.length)
-  let offset = 6 + 16 * images.length
-  for (let i = 0; i < images.length; i++) {
-    const size = WIN_ICO_SIZES[i]
-    const entry = entries.subarray(i * 16, (i + 1) * 16)
-    entry[0] = size >= 256 ? 0 : size // width; 0 means 256
-    entry[1] = size >= 256 ? 0 : size // height
-    entry[2] = 0 // color count
-    entry[3] = 0 // reserved
-    entry.writeUInt16LE(1, 4) // planes
-    entry.writeUInt16LE(32, 6) // bit count
-    entry.writeUInt32LE(images[i].length, 8)
-    entry.writeUInt32LE(offset, 12)
-    offset += images[i].length
-  }
+  header.writeUInt16LE(0, 0)
+  header.writeUInt16LE(1, 2) // type: ICO
+  header.writeUInt16LE(WIN_ICO_SIZES.length, 4)
+
   await mkdir(ASSETS, { recursive: true })
-  await writeFile(dest, Buffer.concat([header, entries, ...images]))
+  const ico = Buffer.concat([header, ...entries, ...imageDataBuffers])
+  await writeFile(dest, ico)
 }
 
 await mkdir(ASSETS, { recursive: true })
 const macTile = await renderTile(MAC_MARGIN_SHARE, MAC_CORNER_SHARE)
 await writeFile(resolve(ASSETS, 'icon.png'), macTile)
-const winTile = await renderTile(WIN_MARGIN_SHARE, WIN_CORNER_SHARE, WIN_CROP_MARK_MULTIPLE)
+const winTile = await renderTile(WIN_MARGIN_SHARE, WIN_CORNER_SHARE)
 await writeFile(resolve(ASSETS, 'icon-win.png'), winTile)
-await writeIco(winTile, resolve(ASSETS, 'icon-win.ico'))
-console.log(`gen-electron-icons: wrote icon.png, icon-win.png (body ${Math.round(SIZE * (1 - 2 * WIN_MARGIN_SHARE))}px) and icon-win.ico (${WIN_ICO_SIZES.join('/')})`)
+await writeIco(resolve(ASSETS, 'icon2.png'), resolve(ASSETS, 'icon2.ico'))
+console.log(`gen-electron-icons: wrote icon.png, icon-win.png (body ${Math.round(SIZE * (1 - 2 * WIN_MARGIN_SHARE))}px) and icon2.ico (BMP ${WIN_ICO_SIZES.join('/')})`)

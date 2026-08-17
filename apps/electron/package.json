@@ -77,11 +77,20 @@
       ]
     },
     "win": {
-      "icon": "assets/icon-win.ico",
+      "icon": "assets/icon2.png",
       "target": [
         "nsis"
       ],
       "artifactName": "${productName}-Setup-${version}.${ext}"
-    }
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    },
+    "asarUnpack": [
+      "**/node-pty/**",
+      "**/*.exe",
+      "**/*.dll"
+    ]
   }
 }

@@ -18,7 +18,7 @@
 import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, nativeTheme } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync } from 'node:fs'
-import { copyFile, mkdir, readdir, rename } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { serverUrlFromLine } from './server-url.ts'
@@ -43,11 +43,11 @@ const APP_ICON = join(ASSET_DIR, 'icon.png')
 
 /** The denser Windows/Linux window icon: the same mark nearly filling the
  * tile, so the taskbar button reads larger than the macOS dock layout. */
-const WINDOW_ICON = join(ASSET_DIR, 'icon-win.png')
+const WINDOW_ICON = join(ASSET_DIR, 'icon2.png')
 
 /** The Windows window icon as a multi-resolution .ico, so the taskbar and
  * Alt-Tab pick exact sizes instead of downscaling a single PNG. */
-const WINDOW_ICON_ICO = join(ASSET_DIR, 'icon-win.ico')
+const WINDOW_ICON_ICO = join(ASSET_DIR, 'icon2.ico')
 
 /** The black-shape tray source; template rendering picks up the menu bar color. */
 const TRAY_ICON = join(ASSET_DIR, 'deepseek-tray.png')
@@ -374,14 +374,38 @@ function embeddedDshEntry(): string {
 /** Where the packaged runtime lands on disk, keyed by app version. */
 const RUNTIME_NODE_MODULES = join(app.getPath('userData'), 'runtime', app.getVersion(), 'node_modules')
 
-/** Recursively copy one directory tree (asar reads resolve unpacked stubs). */
+/**
+ * Recursively copy one directory tree onto disk.  The source lives inside an
+ * asar; Electron's patched `readFile` transparently redirects to the
+ * `app.asar.unpacked` companion for files that were unpacked at build time, so
+ * every `readFile` resolves to a real on-disk path that the child process can
+ * later access without the asar layer.
+ */
 async function copyDir(src: string, dst: string): Promise<void> {
   await mkdir(dst, { recursive: true })
   for (const entry of await readdir(src, { withFileTypes: true })) {
     const source = join(src, entry.name)
     const target = join(dst, entry.name)
-    if (entry.isDirectory()) await copyDir(source, target)
-    else await copyFile(source, target)
+    if (entry.isDirectory()) {
+      await copyDir(source, target)
+    } else {
+      // Electron's asar layer redirects reads to app.asar.unpacked for files
+      // that were unpacked at build time, but the redirect can fail when the
+      // unpacked stub in the asar index doesn't match the actual on-disk
+      // layout.  Read directly from the unpacked path first; fall back to the
+      // asar path for JS-only files that were never unpacked.
+      const unpacked = source.replace(/app\.asar([\\/])/, 'app.asar.unpacked$1')
+      try {
+        await writeFile(target, await readFile(unpacked))
+      } catch {
+        try {
+          await writeFile(target, await readFile(source))
+        } catch {
+          // Skip entries the asar index listed but that exist on neither
+          // the unpacked tree nor the archive (stale symlinks, etc.).
+        }
+      }
+    }
   }
 }
 
