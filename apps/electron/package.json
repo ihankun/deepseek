@@ -60,7 +60,7 @@
   },
   "build": {
     "appId": "ai.deepseek.harness",
-    "productName": "DeepSeek",
+    "productName": "DeepSeek Harness",
     "directories": {
       "output": "release"
     },
@@ -71,7 +71,7 @@
     ],
     "npmRebuild": false,
     "mac": {
-      "icon": "assets/icon.png",
+      "icon": "assets/icon2.png",
       "target": [
         "dmg",
         "zip"

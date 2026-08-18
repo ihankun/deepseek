@@ -39,7 +39,7 @@ const IS_MAC = process.platform === 'darwin'
 const PRELOAD = join(dirname(fileURLToPath(import.meta.url)), 'types', 'preload.mjs')
 
 /** The app icon shown in the dock and on the window: white rounded-rect with the logo. */
-const APP_ICON = join(ASSET_DIR, 'icon.png')
+const APP_ICON = join(ASSET_DIR, 'icon2.png')
 
 /** The denser Windows/Linux window icon: the same mark nearly filling the
  * tile, so the taskbar button reads larger than the macOS dock layout. */

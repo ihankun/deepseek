@@ -19,7 +19,7 @@ The system title bar is hidden for an immersive look: macOS keeps the traffic li
 
 ## Icon assets
 
-`assets/` carries the icon resources. The tray uses `deepseek-tray.png` — a black shape on transparency, resized to the 24pt menu-bar size (48px @2x) and marked as a macOS template image, so the menu bar renders it in the current light/dark color automatically. The dock icon is `icon.png`, matched to the DeepSeek desktop client icon: a rounded rect inset 9% per side (the Apple icon-template proportion) with the macOS standard corner radius (22.5%). The window icon is `icon-win.png` (win/linux) plus `icon-win.ico` (Windows taskbar/Alt-Tab, multi-resolution 16–256): the same mark cropped and stretched to nearly fill the tile, so the taskbar button reads at full size. All are generated from `icon-white.png` by `pnpm --filter @deepseek-ai/dsh-electron-app run gen:icons` (script at `scripts/gen-electron-icons.ts`, needs the `sharp` devDependency). Swap the source file in place and re-run the generator to rebrand.
+`assets/` carries the icon resources. The tray uses `deepseek-tray.png` — a black shape on transparency, resized to the 24pt menu-bar size (48px @2x) and marked as a macOS template image, so the menu bar renders it in the current light/dark color automatically. The dock icon is `icon2.png`, matched to the DeepSeek desktop client icon: a rounded rect inset 9% per side (the Apple icon-template proportion) with the macOS standard corner radius (22.5%). The window icon is `icon-win.png` (win/linux) plus `icon-win.ico` (Windows taskbar/Alt-Tab, multi-resolution 16–256): the same mark cropped and stretched to nearly fill the tile, so the taskbar button reads at full size. All are generated from `icon-white.png` by `pnpm --filter @deepseek-ai/dsh-electron-app run gen:icons` (script at `scripts/gen-electron-icons.ts`, needs the `sharp` devDependency). Swap the source file in place and re-run the generator to rebrand.
 
 ## Build and run
 
@@ -34,8 +34,8 @@ pnpm run electron:dev              # boot the desktop shell (web server + window
 ## Packaging
 
 ```sh
-pnpm run electron:build:mac        # macOS: release/DeepSeek-<ver>-{arm64,x64}.{dmg,zip}
-pnpm run electron:build:win        # Windows: release/DeepSeek-Setup-<ver>.exe
+pnpm run electron:build:mac        # macOS: release/DeepSeek Harness-<ver>-{arm64,x64}.{dmg,zip}
+pnpm run electron:build:win        # Windows: release/DeepSeek Harness-Setup-<ver>.exe
 ```
 
-Packaging needs the built `lib/` entries (`pnpm run build` first), the `electron-builder` devDependency (`pnpm install`), and network access to download the Electron dist. The Windows build runs on any host that can run electron-builder; on macOS it additionally needs Wine. The macOS icon is generated from `assets/icon.png` by electron-builder; the Windows installer embeds `assets/icon-win.ico`. The NSIS installer is assisted (`oneClick: false`) and lets the user choose the install directory. The packaged app bundles the `@deepseek-ai/dsh` dependency tree (electron-builder collects it from the declared dependencies), so the asar contains everything the embedded server needs.
+Packaging needs the built `lib/` entries (`pnpm run build` first), the `electron-builder` devDependency (`pnpm install`), and network access to download the Electron dist. The Windows build runs on any host that can run electron-builder; on macOS it additionally needs Wine. The macOS icon is generated from `assets/icon2.png` by electron-builder; the Windows installer embeds `assets/icon-win.ico`. The NSIS installer is assisted (`oneClick: false`) and lets the user choose the install directory. The packaged app bundles the `@deepseek-ai/dsh` dependency tree (electron-builder collects it from the declared dependencies), so the asar contains everything the embedded server needs.

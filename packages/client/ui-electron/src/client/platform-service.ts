@@ -2,6 +2,19 @@
  * Platform detection service for Electron-specific UI adaptations.
  * Provides platform information without requiring direct window.dshWindow access.
  */
+
+declare global {
+  interface Window {
+    /** The desktop shell's preload bridge, present only inside the Electron shell. */
+    dshWindow?: {
+      platform: string
+      minimize(): void
+      toggleMaximize(): void
+      close(): void
+    }
+  }
+}
+
 export interface PlatformService {
   /** Whether the app is running in Electron shell. */
   readonly isElectron: boolean
