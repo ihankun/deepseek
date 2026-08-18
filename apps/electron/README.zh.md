@@ -15,11 +15,11 @@
 
 ## 窗口装饰
 
-系统标题栏被隐藏以获得沉浸式观感:macOS 在内容上方保留红绿灯(`titleBarStyle: 'hidden'`),win/linux 使用无边框窗口,由主进程向页面注入 36px 参与文档流的标题栏(拖拽区加最小化/最大化/还原/关闭 SVG 按钮),并取用侧边栏的填充 token,使标题栏与侧边栏融为一体并随浅色/深色主题切换。按钮通过 `dshWindow` preload 桥(`src/preload.mts`)与主进程通信。当 preload 桥报告 `darwin` 时,web 布局会预留红绿灯区域。
+系统标题栏被隐藏以获得沉浸式观感:macOS 在内容上方保留红绿灯(`titleBarStyle: 'hidden'`),win/linux 使用无边框窗口,由主进程向页面注入 36px 参与文档流的标题栏(拖拽区加最小化/最大化/还原/关闭 SVG 按钮),并取用侧边栏的填充 token,使标题栏与侧边栏融为一体并随浅色/深色主题切换。按钮通过 `dshWindow` preload 桥(`src/preload.mts`)与主进程通信。当 preload 桥报告 `darwin` 时,web 布局会预留红绿灯区域。窗口几何(位置与大小)持久化到应用 userData 下的 `window-state.json`:主进程在移动/缩放(防抖)及退出时写入,`dsh-client-ui-electron` 插件在启动时恢复,每次打开都会回到上次的位置和大小。
 
 ## 图标资源
 
-`assets/` 存放图标资源。托盘使用 `deepseek-tray.png`——透明底的黑色形状,缩放到菜单栏规范的 24pt(2x 为 48px)并标记为 macOS template image,菜单栏会自动按当前浅色/深色渲染。dock 图标为 `icon2.png`,对齐 DeepSeek 桌面客户端图标:四周内缩 9%(Apple 图标模板比例)、圆角为 macOS 标准 22.5% 的圆角矩形。窗口图标为 `icon-win.png`(win/linux)及 `icon-win.ico`(Windows 任务栏/Alt-Tab,多分辨率 16–256):同一 logo 裁掉留白并拉伸至铺满瓷砖,使任务栏按钮按完整尺寸显示。全部由 `pnpm --filter @deepseek-ai/dsh-electron-app run gen:icons` 从 `icon-white.png` 生成(脚本在 `scripts/gen-electron-icons.ts`,需要 `sharp` devDependency)。原位替换源文件并重新运行生成器即可换肤。
+`assets/` 存放图标资源。托盘使用 `deepseek-tray.png`——透明底的黑色形状,缩放到菜单栏规范的 24pt(2x 为 48px)并标记为 macOS template image,菜单栏会自动按当前浅色/深色渲染。dock 图标为 `icon2.png`,对齐 DeepSeek 桌面客户端图标:四周内缩 9%(Apple 图标模板比例)、圆角为 macOS 标准 22.5% 的圆角矩形。窗口图标为 `icon2-win.png`(win/linux)及 `icon2-win.ico`(Windows 任务栏/Alt-Tab,多分辨率 16–256):同一 icon2 标记裁掉 macOS 内缩留白并拉伸至铺满瓷砖,使任务栏按钮按完整尺寸显示。全部图标通过 `pnpm --filter @deepseek-ai/dsh-electron-app run gen:icons` 重新生成(脚本在 `scripts/gen-electron-icons.ts`,需要 `sharp` devDependency):macOS dock 图标与白底 win/linux 图标由 `icon-white.png` 派生,`icon2-win.*` 则由 `icon2.png` 派生。原位替换源文件并重新运行生成器即可换肤。
 
 ## 构建与运行
 
@@ -38,4 +38,4 @@ pnpm run electron:build:mac        # macOS: release/DeepSeek Harness-<ver>-{arm6
 pnpm run electron:build:win        # Windows: release/DeepSeek Harness-Setup-<ver>.exe
 ```
 
-打包需要已构建的 `lib/` 产物(先 `pnpm run build`)、`electron-builder` devDependency(`pnpm install`),以及下载 Electron dist 的网络。Windows 构建可在任意能运行 electron-builder 的主机执行;在 macOS 上还需要 Wine。macOS 图标由 electron-builder 从 `assets/icon2.png` 生成;Windows 安装包嵌入 `assets/icon-win.ico`。NSIS 安装器为引导式(`oneClick: false`),允许用户自选安装目录。打包应用携带 `@deepseek-ai/dsh` 依赖树(electron-builder 从声明的 dependencies 收集),asar 内即包含内嵌服务器所需的全部内容。
+打包需要已构建的 `lib/` 产物(先 `pnpm run build`)、`electron-builder` devDependency(`pnpm install`),以及下载 Electron dist 的网络。Windows 构建可在任意能运行 electron-builder 的主机执行;在 macOS 上还需要 Wine。macOS 图标由 electron-builder 从 `assets/icon2.png` 生成;Windows 安装包嵌入 `assets/icon2-win.ico`。NSIS 安装器为引导式(`oneClick: false`),允许用户自选安装目录。打包应用携带 `@deepseek-ai/dsh` 依赖树(electron-builder 从声明的 dependencies 收集),asar 内即包含内嵌服务器所需的全部内容。

@@ -5,6 +5,7 @@
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import { DefaultPlatformService } from './platform-service.ts'
 import { startWindowsTitlebarMerge } from './titlebar-merge.ts'
+import { restoreWindowState } from './window-state.ts'
 
 /** Services required by the Electron plugin. */
 export const inject = ['slots', 'layout']
@@ -43,6 +44,13 @@ export function apply(ctx: ClientContext): void {
 
     if (platformService.isWindows) {
       ctx.effect(() => startWindowsTitlebarMerge(), 'ui-electron: windows titlebar merge')
+    }
+
+    // Restore the window geometry persisted by the main process; the save
+    // side lives there, so this is the plugin's only part of the contract.
+    const dshWindow = window.dshWindow
+    if (dshWindow !== undefined) {
+      void restoreWindowState(dshWindow)
     }
   }
 }

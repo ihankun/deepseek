@@ -80,7 +80,7 @@
       ]
     },
     "win": {
-      "icon": "assets/icon2.png",
+      "icon": "assets/icon2-win.png",
       "target": [
         "nsis"
       ],
