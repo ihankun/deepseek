@@ -21,6 +21,7 @@ import { existsSync } from 'node:fs'
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { healProfilesModuleFallback } from '@deepseek-ai/dsh-app-boot'
 import { serverUrlFromLine } from './server-url.ts'
 
 const ASSET_DIR = fileURLToPath(new URL('../assets/', import.meta.url))
@@ -372,7 +373,33 @@ function embeddedDshEntry(): string {
 }
 
 /** Where the packaged runtime lands on disk, keyed by app version. */
-const RUNTIME_NODE_MODULES = join(app.getPath('userData'), 'runtime', app.getVersion(), 'node_modules')
+const RUNTIME_DIR = join(app.getPath('userData'), 'runtime', app.getVersion())
+const RUNTIME_NODE_MODULES = join(RUNTIME_DIR, 'node_modules')
+/** The electron patch layer, materialized beside the runtime for the server child. */
+const RUNTIME_PATCH = join(RUNTIME_DIR, 'cordis.patch.yml')
+/** The electron app's own manifest, materialized beside the runtime for the server child. */
+const RUNTIME_PACKAGE_JSON = join(RUNTIME_DIR, 'package.json')
+
+/**
+ * The electron patch layer the embedded server applies via `--patch`: the
+ * checkout's file in dev, the asar copy in a packaged app (both sit one level
+ * above this entry's lib/). It inserts the electron-only UI adaptation rows
+ * that the web profile's own layers do not mount.
+ */
+function embeddedPatchFile(): string {
+  return join(dirname(fileURLToPath(import.meta.url)), '..', 'cordis.patch.yml')
+}
+
+/**
+ * The electron app's own manifest, the anchor whose dependency closure the
+ * profile fallback heals so the patch's bare plugin rows resolve: the checkout
+ * file in dev, the materialized copy in a packaged app.
+ */
+function electronManifestPath(): string {
+  return app.isPackaged
+    ? RUNTIME_PACKAGE_JSON
+    : join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json')
+}
 
 /**
  * Recursively copy one directory tree onto disk.  The source lives inside an
@@ -410,19 +437,25 @@ async function copyDir(src: string, dst: string): Promise<void> {
 }
 
 /**
- * Materialize the bundled node_modules onto disk. dsh's profile fallback
- * heals symlinks that point at the installation; inside an asar those targets
- * do not exist on the real filesystem, so the server must run from a disk
- * copy. Cached per app version; the copy lands in a temp dir and renames into
- * place so an interrupted first run never leaves a partial tree.
+ * Materialize the bundled runtime onto disk. dsh's profile fallback heals
+ * symlinks that point at the installation; inside an asar those targets do not
+ * exist on the real filesystem, so the server must run from a disk copy.
+ * Cached per app version; the copy lands in a temp dir and renames into place
+ * so an interrupted first run never leaves a partial tree. The electron patch
+ * and the app's own manifest ride along: the server child is plain Node and
+ * cannot read asar paths, and its profile fallback heal needs the electron
+ * closure (the CLI's own closure lacks the electron-only plugin rows).
  */
 async function ensureRuntimeCopy(): Promise<void> {
-  if (existsSync(RUNTIME_NODE_MODULES)) return
-  const startedAt = Date.now()
-  const staging = `${RUNTIME_NODE_MODULES}.tmp`
-  await copyDir(join(app.getAppPath(), 'node_modules'), staging)
-  await rename(staging, RUNTIME_NODE_MODULES)
-  console.error(`electron: materialized runtime in ${Date.now() - startedAt}ms`)
+  if (!existsSync(RUNTIME_NODE_MODULES)) {
+    const startedAt = Date.now()
+    const staging = `${RUNTIME_NODE_MODULES}.tmp`
+    await copyDir(join(app.getAppPath(), 'node_modules'), staging)
+    await rename(staging, RUNTIME_NODE_MODULES)
+    console.error(`electron: materialized runtime in ${Date.now() - startedAt}ms`)
+  }
+  await writeFile(RUNTIME_PATCH, await readFile(embeddedPatchFile()))
+  await writeFile(RUNTIME_PACKAGE_JSON, await readFile(join(app.getAppPath(), 'package.json')))
 }
 
 /**
@@ -432,7 +465,11 @@ async function ensureRuntimeCopy(): Promise<void> {
  * @returns the loopback URL once the server is up.
  */
 function startEmbeddedServer(): Promise<string> {
-  const child = spawn(process.execPath, [embeddedDshEntry(), 'web', '--port', '0'], {
+  const patchPath = app.isPackaged ? RUNTIME_PATCH : embeddedPatchFile()
+  // --patch must precede --port: the CLI treats an unknown option's value as
+  // the first positional, after which enablePositionalOptions stops parsing
+  // options entirely.
+  const child = spawn(process.execPath, [embeddedDshEntry(), 'web', '--patch', patchPath, '--port', '0'], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
@@ -492,6 +529,10 @@ if (!app.requestSingleInstanceLock()) {
     if (url === undefined) {
       try {
         if (app.isPackaged) await ensureRuntimeCopy()
+        // The patch's plugin rows resolve through the profile module
+        // fallback; heal it from the electron closure so the CLI's own heal
+        // (which lacks the electron-only rows) leaves them linked.
+        healProfilesModuleFallback(electronManifestPath())
         url = await startEmbeddedServer()
       } catch (error) {
         fatal(error instanceof Error ? error.message : String(error))

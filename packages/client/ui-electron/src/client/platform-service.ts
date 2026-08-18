@@ -20,6 +20,8 @@ export interface PlatformService {
   readonly isElectron: boolean
   /** Whether the app is running on macOS. */
   readonly isMac: boolean
+  /** Whether the app is running on Windows. */
+  readonly isWindows: boolean
   /** Whether the app should reserve space for macOS traffic lights. */
   readonly reserveTrafficLights: boolean
 }
@@ -28,16 +30,19 @@ export interface PlatformService {
 export class DefaultPlatformService implements PlatformService {
   readonly isElectron: boolean
   readonly isMac: boolean
+  readonly isWindows: boolean
   readonly reserveTrafficLights: boolean
 
   constructor() {
     if (typeof window === 'undefined' || window.dshWindow === undefined) {
       this.isElectron = false
       this.isMac = false
+      this.isWindows = false
       this.reserveTrafficLights = false
     } else {
       this.isElectron = true
       this.isMac = window.dshWindow.platform === 'darwin'
+      this.isWindows = window.dshWindow.platform === 'win32'
       this.reserveTrafficLights = this.isMac
     }
   }

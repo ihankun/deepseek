@@ -134,7 +134,7 @@
     "release:verify-packed-install": "tsx scripts/release/verify-packed-install.ts",
     "release:publish": "tsx scripts/release/publish.ts",
     "dsh": "node --import tsx/esm apps/cli/src/bin.ts",
-    "electron:dev": "pnpm run build:lib:host && pnpm --filter @deepseek-ai/dsh-electron-app exec electron lib/main.js",
+    "electron:dev": "pnpm run build:lib:host && pnpm run build:lib:client && pnpm --filter @deepseek-ai/dsh-electron-app exec electron lib/main.js",
     "electron:build:mac": "pnpm --filter @deepseek-ai/dsh-electron-app run build:mac",
     "electron:build:win": "pnpm --filter @deepseek-ai/dsh-electron-app run build:win",
     "demo:code-mode": "node scripts/demo-code-mode.mjs",
