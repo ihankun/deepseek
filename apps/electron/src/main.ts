@@ -148,9 +148,13 @@ let activeUrl = ''
 /** Create (or refocus) the main window pointing at the composed web URL. */
 function showMainWindow(): void {
   if (mainWindow === undefined) {
+    // Apply the persisted geometry at creation, so the window appears in its
+    // previous place on the first frame — no jump from the centered default
+    // after the page loads.
+    const saved = readWindowBounds()
+    const initial = saved === null ? null : clampToVisible(saved)
     mainWindow = new BrowserWindow({
-      width: 1280,
-      height: 800,
+      ...(initial === null ? { width: 1280, height: 800 } : initial),
       minWidth: MIN_WINDOW_WIDTH,
       minHeight: MIN_WINDOW_HEIGHT,
       title: 'DeepSeek Harness',
@@ -410,18 +414,6 @@ ipcMain.on('dsh-window-control', (event, action: unknown) => {
 ipcMain.handle('dsh-window-is-maximized', (event): boolean => {
   const win = BrowserWindow.fromWebContents(event.sender)
   return win?.isMaximized() ?? false
-})
-
-/** The persisted window bounds, served to the client for boot-time restore. */
-ipcMain.handle('dsh-window-get-saved-bounds', (): WindowBounds | null => readWindowBounds())
-
-/** Apply client-requested bounds, clamped to the current display topology. */
-ipcMain.handle('dsh-window-set-bounds', (event, value: unknown): boolean => {
-  const bounds = parseBounds(value)
-  const win = BrowserWindow.fromWebContents(event.sender)
-  if (bounds === null || win === null) return false
-  win.setBounds(clampToVisible(bounds))
-  return true
 })
 
 let saveWindowStateTimer: NodeJS.Timeout | undefined

@@ -13,8 +13,6 @@ const BRIDGE = {
   minimize: () => {},
   toggleMaximize: () => {},
   close: () => {},
-  getSavedBounds: () => Promise.resolve(null),
-  setBounds: () => Promise.resolve(true),
 }
 
 function shellHtml(): string {
@@ -106,20 +104,6 @@ describe('ui-electron client apply', () => {
     await fiber.await()
     expect(ctx.get('platform')).toBeInstanceOf(DefaultPlatformService)
     expect(document.body.classList.contains('dsh-electron')).toBe(false)
-    await fiber.dispose()
-  })
-
-  it('restores the saved window bounds at boot', async () => {
-    const setBounds = vi.fn().mockResolvedValue(true)
-    const saved = { x: 10, y: 20, width: 1000, height: 700 }
-    window.dshWindow = { ...BRIDGE, setBounds, getSavedBounds: () => Promise.resolve(saved) }
-    const ctx = new Context()
-    ctx.provide('slots', {} as never)
-    ctx.provide('layout', {} as never)
-    const fiber = ctx.plugin({ inject: [...inject], apply })
-    await fiber.await()
-    await new Promise((resolve) => { setTimeout(resolve, 0) })
-    expect(setBounds).toHaveBeenCalledWith(saved)
     await fiber.dispose()
   })
 })

@@ -9,14 +9,6 @@
 
 import { contextBridge, ipcRenderer } from 'electron'
 
-/** Window geometry shared with the main process over the bridge. */
-export interface WindowBounds {
-  x: number
-  y: number
-  width: number
-  height: number
-}
-
 contextBridge.exposeInMainWorld('dshWindow', {
   /** The platform the app runs on, so the title bar can adapt its layout. */
   platform: process.platform,
@@ -29,11 +21,6 @@ contextBridge.exposeInMainWorld('dshWindow', {
   onMaximizeStateChange: (listener: (maximized: boolean) => void): void => {
     ipcRenderer.on('dsh-window-maximize-state', (_event, maximized: boolean) => { listener(maximized) })
   },
-  /** The window geometry persisted by the main process, or null on first run. */
-  getSavedBounds: (): Promise<WindowBounds | null> => ipcRenderer.invoke('dsh-window-get-saved-bounds'),
-  /** Move and resize the window; the main process clamps to the visible
-   * display. Resolves false when the payload is invalid. */
-  setBounds: (bounds: WindowBounds): Promise<boolean> => ipcRenderer.invoke('dsh-window-set-bounds', bounds),
 } satisfies Record<string, unknown> & {
   platform: NodeJS.Platform
   minimize: () => void
@@ -41,6 +28,4 @@ contextBridge.exposeInMainWorld('dshWindow', {
   close: () => void
   maximized: () => Promise<boolean>
   onMaximizeStateChange: (listener: (maximized: boolean) => void) => void
-  getSavedBounds: () => Promise<WindowBounds | null>
-  setBounds: (bounds: WindowBounds) => Promise<boolean>
 })
