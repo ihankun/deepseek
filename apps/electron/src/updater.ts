@@ -13,13 +13,34 @@
 import { app, net } from 'electron'
 import { spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { createReadStream, createWriteStream, mkdirSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createReadStream, createWriteStream, mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { basename, dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import pkg from 'electron-updater'
 import type { UpdateInfo } from 'electron-updater'
 
 const { autoUpdater } = pkg
+
+/**
+ * The app's own version, read from this app's package.json. `app.getVersion()`
+ * reports the Electron version in dev (unpackaged) runs, so the product version
+ * must come from the manifest itself.
+ */
+const APP_VERSION = readAppVersion()
+
+/** Read the version from this app's package.json, falling back to Electron's. */
+function readAppVersion(): string {
+  try {
+    const pkgPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json')
+    const manifest = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: unknown }
+    return typeof manifest.version === 'string' && manifest.version.length > 0
+      ? manifest.version
+      : app.getVersion()
+  } catch {
+    return app.getVersion()
+  }
+}
 
 /** Minimum interval between update checks (debounces UI-triggered checks). */
 const MIN_CHECK_INTERVAL_MS = 10_000
@@ -314,7 +335,7 @@ async function checkForMacUpdate(setState: (patch: Partial<UpdaterState>) => voi
   const asset = release.assets.find(item => new RegExp(`^${escapeRegExp(PRODUCT_NAME)}-.*-${arch}\\.zip$`).test(item.name))
   if (!asset) throw new Error(`Update package for ${arch} not found`)
   const version = normalizeVersion(release.tagName)
-  if (compareVersions(version, app.getVersion()) <= 0) {
+  if (compareVersions(version, APP_VERSION) <= 0) {
     setState({ status: 'not-available', error: null })
     return null
   }

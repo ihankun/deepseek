@@ -28,6 +28,26 @@ import type { UpdaterState } from './updater.ts'
 
 const ASSET_DIR = fileURLToPath(new URL('../assets/', import.meta.url))
 
+/**
+ * The app's own version, read from this app's package.json. `app.getVersion()`
+ * reports the Electron version in dev (unpackaged) runs, so the product version
+ * must come from the manifest itself.
+ */
+const APP_VERSION = readAppVersion()
+
+/** Read the version from this app's package.json, falling back to Electron's. */
+function readAppVersion(): string {
+  try {
+    const pkgPath = join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json')
+    const manifest = JSON.parse(readFileSync(pkgPath, 'utf8')) as { version?: unknown }
+    return typeof manifest.version === 'string' && manifest.version.length > 0
+      ? manifest.version
+      : app.getVersion()
+  } catch {
+    return app.getVersion()
+  }
+}
+
 /** The web server URL a harness launcher composed, read from the environment. */
 const webUrl = process.env.DSH_WEB_URL
 
@@ -448,6 +468,10 @@ function registerUpdaterIpc(): void {
     autoUpdater.install()
     return true
   })
+  ipcMain.handle('dsh-app-version', (event): string | null => {
+    if (!fromWindow(event)) return null
+    return APP_VERSION
+  })
 }
 
 /** Broadcast a new update state to every open window. */
@@ -679,9 +703,6 @@ if (!app.requestSingleInstanceLock()) {
     }
     await waitForServer(url)
     activeUrl = url
-    if (process.platform === 'darwin') {
-      app.dock?.setIcon(nativeImage.createFromPath(APP_ICON))
-    }
     showMainWindow()
     createTray()
     // Auto-update: register IPC before any window asks, then check once at

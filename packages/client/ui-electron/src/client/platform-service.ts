@@ -39,6 +39,8 @@ declare global {
       updaterInstall(): Promise<boolean>
       /** Subscribe to auto-update state changes pushed from the main process. */
       onUpdaterStateChange(listener: (state: UpdaterState) => void): void
+      /** The app's version string (e.g. 0.1.1), or null when the sender is invalid. */
+      version(): Promise<string | null>
     }
   }
 }

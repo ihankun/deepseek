@@ -155,6 +155,7 @@ describe('AppFrame', () => {
       updaterDownload: () => Promise.resolve(true),
       updaterInstall: () => Promise.resolve(true),
       onUpdaterStateChange: () => {},
+      version: () => Promise.resolve('0.1.1'),
     }
     const shell = mountFrame()
     expect(shell.frame.querySelector('[data-traffic-reserve]')).not.toBeNull()

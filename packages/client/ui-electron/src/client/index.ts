@@ -10,6 +10,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import { DefaultPlatformService } from './platform-service.ts'
 import { startWindowsTitlebarMerge } from './titlebar-merge.ts'
+import { startVersionBadge } from './version-badge.ts'
 import { UpdateEntry } from './UpdateEntry.tsx'
 import { UpdateStore, type UpdateEntryInjected } from './update-store.ts'
 import { en, zh, type ElectronKey } from './locales.ts'
@@ -64,6 +65,10 @@ export function apply(ctx: ClientContext): void {
     if (platformService.isWindows) {
       ctx.effect(() => startWindowsTitlebarMerge(), 'ui-electron: windows titlebar merge')
     }
+
+    // Hovering the brand wordmark reveals the app version over the HARNESS
+    // badge plate (desktop shell only).
+    ctx.effect(() => startVersionBadge(), 'ui-electron: version badge')
 
     // The update entry rides the sidebar foot's action seat, so it appears
     // beside Settings only inside the desktop shell. One store instance is

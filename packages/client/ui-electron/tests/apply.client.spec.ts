@@ -21,6 +21,7 @@ const BRIDGE = {
   updaterDownload: () => Promise.resolve(true),
   updaterInstall: () => Promise.resolve(true),
   onUpdaterStateChange: () => {},
+  version: () => Promise.resolve('0.1.1'),
 }
 
 function shellHtml(): string {

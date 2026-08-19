@@ -45,6 +45,8 @@ contextBridge.exposeInMainWorld('dshWindow', {
   onUpdaterStateChange: (listener: (state: UpdaterState) => void): void => {
     ipcRenderer.on('dsh-updater-state', (_event, state: UpdaterState) => { listener(state) })
   },
+  /** The app's version string (e.g. 0.1.1), or null when the sender is invalid. */
+  version: (): Promise<string | null> => ipcRenderer.invoke('dsh-app-version'),
 } satisfies Record<string, unknown> & {
   platform: NodeJS.Platform
   minimize: () => void
@@ -57,4 +59,5 @@ contextBridge.exposeInMainWorld('dshWindow', {
   updaterDownload: () => Promise<boolean>
   updaterInstall: () => Promise<boolean>
   onUpdaterStateChange: (listener: (state: UpdaterState) => void) => void
+  version: () => Promise<string | null>
 })
