@@ -1,10 +1,13 @@
 // @vitest-environment jsdom
 // Client apply wiring: provides the platform service, adds the electron body
-// classes per platform, and on Windows starts the title-bar merge. The node
-// half and the invariant companion ride along — one line each keeps the
-// aggregate coverage gate's exercised surface honest.
+// classes per platform, on Windows starts the title-bar merge, and registers
+// the update entry into the sidebar foot. The node half and the invariant
+// companion ride along — one line each keeps the aggregate coverage gate's
+// exercised surface honest.
 import { Context } from '@deepseek-ai/cordis'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
+import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '../src/client/index.ts'
 import { DefaultPlatformService } from '../src/client/platform-service.ts'
 
@@ -13,6 +16,11 @@ const BRIDGE = {
   minimize: () => {},
   toggleMaximize: () => {},
   close: () => {},
+  updaterState: () => Promise.resolve(null),
+  updaterCheck: () => Promise.resolve(true),
+  updaterDownload: () => Promise.resolve(true),
+  updaterInstall: () => Promise.resolve(true),
+  onUpdaterStateChange: () => {},
 }
 
 function shellHtml(): string {
@@ -40,9 +48,12 @@ function shellHtml(): string {
 async function mount(platform: string) {
   window.dshWindow = { ...BRIDGE, platform }
   const ctx = new Context()
-  // The plugin declares 'slots' and 'layout' as injects; apply never reads
-  // them today, so stubs satisfy the fiber while it activates.
-  ctx.provide('slots', {} as never)
+  await ctx.plugin(SlotRegistry).await()
+  ctx.slots.register({
+    name: 'root',
+    children: { 'sidebar.footer.action': { kind: 'list', scope: 'root' } },
+  } as never, (() => null) as never)
+  ctx.provide('locale', new LocaleRuntime(ctx))
   ctx.provide('layout', {} as never)
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
@@ -64,7 +75,7 @@ beforeEach(() => {
 
 describe('ui-electron client apply', () => {
   it('declares its service dependencies', () => {
-    expect(inject).toEqual(['slots', 'layout'])
+    expect(inject).toEqual(['slots', 'layout', 'locale'])
   })
 
   it('provides and later unprovides the platform service', async () => {
@@ -72,6 +83,13 @@ describe('ui-electron client apply', () => {
     expect(ctx.get('platform')).toBeInstanceOf(DefaultPlatformService)
     await fiber.dispose()
     expect(ctx.get('platform')).toBeUndefined()
+  })
+
+  it('registers the update entry into the sidebar foot', async () => {
+    const { ctx, fiber } = await mount('win32')
+    expect(ctx.slots.entries('sidebar.footer.action')[0]?.options).toMatchObject({ id: 'update', order: 0 })
+    await fiber.dispose()
+    expect(ctx.slots.entries('sidebar.footer.action')).toHaveLength(0)
   })
 
   it('adds the macOS classes and the electron marker', async () => {
@@ -98,12 +116,14 @@ describe('ui-electron client apply', () => {
 
   it('adds no electron classes in a plain browser', async () => {
     const ctx = new Context()
-    ctx.provide('slots', {} as never)
+    await ctx.plugin(SlotRegistry).await()
+    ctx.provide('locale', new LocaleRuntime(ctx))
     ctx.provide('layout', {} as never)
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
     expect(ctx.get('platform')).toBeInstanceOf(DefaultPlatformService)
     expect(document.body.classList.contains('dsh-electron')).toBe(false)
+    expect(ctx.slots.entries('sidebar.footer.action')).toHaveLength(0)
     await fiber.dispose()
   })
 })

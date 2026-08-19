@@ -178,13 +178,15 @@ export function SidebarRoot({
         })}
       </div>
 
-      {/* Footer actions stack above Settings in both sidebar widths. */}
+      {/* Footer: Settings sits at the left edge with its content width, and
+          footer actions (the desktop-shell update entry) fill the remaining
+          row to the right. The rail keeps them stacked vertically. */}
       <div className={css.footArea}>
-        <div className={css.footerActions}>
-          {renderSlot('sidebar.footer.action', { wide })}
-        </div>
         <div className={css.settingsArea}>
           {renderSlot('sidebar.settings', { wide })}
+        </div>
+        <div className={css.footerActions}>
+          {renderSlot('sidebar.footer.action', { wide })}
         </div>
       </div>
     </div>

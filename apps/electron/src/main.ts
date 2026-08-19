@@ -23,6 +23,8 @@ import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { healProfilesModuleFallback } from '@deepseek-ai/dsh-app-boot'
 import { serverUrlFromLine } from './server-url.ts'
+import { createAutoUpdater } from './updater.ts'
+import type { UpdaterState } from './updater.ts'
 
 const ASSET_DIR = fileURLToPath(new URL('../assets/', import.meta.url))
 
@@ -416,6 +418,48 @@ ipcMain.handle('dsh-window-is-maximized', (event): boolean => {
   return win?.isMaximized() ?? false
 })
 
+// ── auto-update IPC ─────────────────────────────────────────────────────────
+
+/** The renderer's update entry points; each validates the sender is a window. */
+function registerUpdaterIpc(): void {
+  const fromWindow = (event: Electron.IpcMainInvokeEvent): boolean =>
+    BrowserWindow.fromWebContents(event.sender) !== null
+
+  ipcMain.handle('dsh-updater-get-state', (event): UpdaterState | null => {
+    if (!fromWindow(event)) return null
+    return autoUpdater.state()
+  })
+  ipcMain.handle('dsh-updater-check', (event): boolean => {
+    if (!fromWindow(event)) return false
+    void autoUpdater.check().catch((error) => {
+      console.error(`electron: update check failed: ${error instanceof Error ? error.message : String(error)}`)
+    })
+    return true
+  })
+  ipcMain.handle('dsh-updater-download', (event): boolean => {
+    if (!fromWindow(event)) return false
+    void autoUpdater.download().catch((error) => {
+      console.error(`electron: update download failed: ${error instanceof Error ? error.message : String(error)}`)
+    })
+    return true
+  })
+  ipcMain.handle('dsh-updater-install', (event): boolean => {
+    if (!fromWindow(event)) return false
+    autoUpdater.install()
+    return true
+  })
+}
+
+/** Broadcast a new update state to every open window. */
+function broadcastUpdaterState(state: UpdaterState): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    win.webContents.send('dsh-updater-state', state)
+  }
+}
+
+/** The auto-update controller; created once the app is ready. */
+let autoUpdater: ReturnType<typeof createAutoUpdater>
+
 let saveWindowStateTimer: NodeJS.Timeout | undefined
 
 /** Debounced window-geometry save; maximized, minimized, and full-screen
@@ -640,6 +684,13 @@ if (!app.requestSingleInstanceLock()) {
     }
     showMainWindow()
     createTray()
+    // Auto-update: register IPC before any window asks, then check once at
+    // startup so the footer badge lights up without user action.
+    autoUpdater = createAutoUpdater(broadcastUpdaterState)
+    registerUpdaterIpc()
+    void autoUpdater.check().catch((error) => {
+      console.error(`electron: startup update check failed: ${error instanceof Error ? error.message : String(error)}`)
+    })
     // An external launcher pipes its stdin into this process; EOF means it
     // died without the teardown that would have killed us directly.
     process.stdin.on('end', () => { app.quit() })

@@ -2,6 +2,17 @@
 import { describe, expect, it } from 'vitest'
 import { DefaultPlatformService } from '../src/client/platform-service.ts'
 
+const BRIDGE = {
+  minimize: () => {},
+  toggleMaximize: () => {},
+  close: () => {},
+  updaterState: () => Promise.resolve(null),
+  updaterCheck: () => Promise.resolve(true),
+  updaterDownload: () => Promise.resolve(true),
+  updaterInstall: () => Promise.resolve(true),
+  onUpdaterStateChange: () => {},
+}
+
 describe('DefaultPlatformService', () => {
   it('reports a plain browser as non-Electron', () => {
     delete window.dshWindow
@@ -13,7 +24,7 @@ describe('DefaultPlatformService', () => {
   })
 
   it('reports macOS and reserves the traffic-light band', () => {
-    window.dshWindow = { platform: 'darwin', minimize: () => {}, toggleMaximize: () => {}, close: () => {} }
+    window.dshWindow = { ...BRIDGE, platform: 'darwin' }
     const service = new DefaultPlatformService()
     expect(service.isElectron).toBe(true)
     expect(service.isMac).toBe(true)
@@ -22,7 +33,7 @@ describe('DefaultPlatformService', () => {
   })
 
   it('reports Windows without the macOS traffic-light reservation', () => {
-    window.dshWindow = { platform: 'win32', minimize: () => {}, toggleMaximize: () => {}, close: () => {} }
+    window.dshWindow = { ...BRIDGE, platform: 'win32' }
     const service = new DefaultPlatformService()
     expect(service.isElectron).toBe(true)
     expect(service.isMac).toBe(false)

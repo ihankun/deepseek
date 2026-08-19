@@ -145,7 +145,17 @@ describe('AppFrame', () => {
   it('reserves the macOS traffic-light band only under the darwin shell', () => {
     const plain = mountFrame()
     expect(plain.frame.querySelector('[data-traffic-reserve]')).toBeNull()
-    window.dshWindow = { platform: 'darwin', minimize: () => {}, toggleMaximize: () => {}, close: () => {} }
+    window.dshWindow = {
+      platform: 'darwin',
+      minimize: () => {},
+      toggleMaximize: () => {},
+      close: () => {},
+      updaterState: () => Promise.resolve(null),
+      updaterCheck: () => Promise.resolve(true),
+      updaterDownload: () => Promise.resolve(true),
+      updaterInstall: () => Promise.resolve(true),
+      onUpdaterStateChange: () => {},
+    }
     const shell = mountFrame()
     expect(shell.frame.querySelector('[data-traffic-reserve]')).not.toBeNull()
     delete window.dshWindow

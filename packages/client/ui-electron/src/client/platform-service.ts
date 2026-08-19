@@ -3,6 +3,24 @@
  * Provides platform information without requiring direct window.dshWindow access.
  */
 
+/** A live snapshot of the auto-update state machine, mirrored from the main process. */
+export interface UpdaterState {
+  /** Whether this build can auto-update at all. */
+  supported: boolean
+  /** The current state-machine phase. */
+  status: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error'
+  /** The version that will be (or was) installed. */
+  version: string | null
+  /** The release name from GitHub, or null. */
+  releaseName: string | null
+  /** The release notes (markdown), or null. */
+  releaseNotes: string | null
+  /** Live download progress while `downloading`. */
+  progress: { percent: number; transferred: number; total: number } | null
+  /** The last failure message while `error`. */
+  error: string | null
+}
+
 declare global {
   interface Window {
     /** The desktop shell's preload bridge, present only inside the Electron shell. */
@@ -11,6 +29,16 @@ declare global {
       minimize(): void
       toggleMaximize(): void
       close(): void
+      /** The current auto-update state, or null when unsupported. */
+      updaterState(): Promise<UpdaterState | null>
+      /** Ask the main process to check for updates. Resolves true when accepted. */
+      updaterCheck(): Promise<boolean>
+      /** Approve and start downloading the available update. Resolves true when accepted. */
+      updaterDownload(): Promise<boolean>
+      /** Quit and install the downloaded update. Resolves true when accepted. */
+      updaterInstall(): Promise<boolean>
+      /** Subscribe to auto-update state changes pushed from the main process. */
+      onUpdaterStateChange(listener: (state: UpdaterState) => void): void
     }
   }
 }

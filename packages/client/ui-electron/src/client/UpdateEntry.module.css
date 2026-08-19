@@ -1,0 +1,251 @@
+/* Update entry and panel (desktop shell sidebar foot). The entry sits in the
+   footer row beside Settings as a compact 36px circle; the panel is a small
+   card floating above the foot, themed through the alias tokens. */
+
+.entry {
+  position: relative;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 42px;
+}
+
+/* 36x36 circle box, matching the rail controls and the settings rail trigger. */
+.button {
+  flex: none;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  box-sizing: border-box;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  overflow: visible;
+  color: var(--dsw-alias-label-primary);
+}
+
+.button:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+/* A subtle accent when an update is actionable. */
+.button.active {
+  color: var(--dsw-alias-accent-main);
+}
+
+/* New-version badge: top-right dot, green once downloaded. */
+.badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--dsw-alias-accent-main);
+}
+
+.badge.installed {
+  background: var(--dsw-alias-success-main);
+}
+
+.spin {
+  animation: dsh-electron-spin 1s linear infinite;
+}
+
+@keyframes dsh-electron-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Floating card above the foot, positioned fixed from the entry's rect and
+   portalled into document.body, so the sidebar column cannot clip it. */
+.panel {
+  position: fixed;
+  z-index: 1000;
+  width: 320px;
+  max-width: calc(100vw - 24px);
+  max-height: calc(100vh - 24px);
+  box-sizing: border-box;
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-base);
+  border: 1px solid var(--dsw-alias-border-l1);
+  box-shadow: var(--dsw-alias-shadow-float);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.panelHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--dsw-alias-border-l1);
+  color: var(--dsw-alias-label-primary);
+}
+
+.panelTitle {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.close {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 16px;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 6px;
+}
+
+.close:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.panelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  font-size: 13px;
+  color: var(--dsw-alias-label-primary);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.versionRow {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.versionLabel {
+  font-weight: 600;
+}
+
+.versionValue {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.progressWrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.progressTrack {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--dsw-alias-bg-weak);
+  overflow: hidden;
+}
+
+.progressFill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--dsw-alias-accent-main);
+  transition: width 0.2s ease;
+}
+
+.muted {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.error {
+  color: var(--dsw-alias-danger-main);
+  word-break: break-word;
+}
+
+.notes {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.notesTitle {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.notesBody {
+  max-height: 160px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-secondary);
+  border-radius: 8px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  background: var(--dsw-alias-bg-weak);
+  padding: 8px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-radius: 8px;
+  padding: 6px 12px;
+  background: var(--dsw-alias-accent-main);
+  color: var(--dsw-alias-bg-raise);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.primary:hover {
+  filter: brightness(1.1);
+}
+
+.ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--dsw-alias-border-l1);
+  border-radius: 8px;
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.ghost:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.releaseLink {
+  color: var(--dsw-alias-accent-main);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.releaseLink:hover {
+  text-decoration: underline;
+}
