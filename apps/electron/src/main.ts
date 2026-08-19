@@ -15,12 +15,13 @@
  * @module @deepseek-ai/dsh-electron-app/main
  */
 
-import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, nativeTheme } from 'electron'
+import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, nativeTheme, screen } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { healProfilesModuleFallback } from '@deepseek-ai/dsh-app-boot'
 import { serverUrlFromLine } from './server-url.ts'
 
 const ASSET_DIR = fileURLToPath(new URL('../assets/', import.meta.url))
@@ -41,13 +42,13 @@ const PRELOAD = join(dirname(fileURLToPath(import.meta.url)), 'types', 'preload.
 /** The app icon shown in the dock and on the window: white rounded-rect with the logo. */
 const APP_ICON = join(ASSET_DIR, 'icon2.png')
 
-/** The denser Windows/Linux window icon: the same mark nearly filling the
- * tile, so the taskbar button reads larger than the macOS dock layout. */
-const WINDOW_ICON = join(ASSET_DIR, 'icon2.png')
+/** The denser Windows/Linux window icon: the same mark cropped to nearly fill
+ * the tile, so the taskbar button reads larger than the macOS dock layout. */
+const WINDOW_ICON = join(ASSET_DIR, 'icon2-win.png')
 
 /** The Windows window icon as a multi-resolution .ico, so the taskbar and
  * Alt-Tab pick exact sizes instead of downscaling a single PNG. */
-const WINDOW_ICON_ICO = join(ASSET_DIR, 'icon2.ico')
+const WINDOW_ICON_ICO = join(ASSET_DIR, 'icon2-win.ico')
 
 /** The black-shape tray source; template rendering picks up the menu bar color. */
 const TRAY_ICON = join(ASSET_DIR, 'deepseek-tray.png')
@@ -60,6 +61,71 @@ const READY_POLL_MS = 200
 
 /** How long the window waits for the web server before giving up. */
 const READY_TIMEOUT_MS = 30_000
+
+/** The main window's minimum size, shared by creation and bounds restore. */
+const MIN_WINDOW_WIDTH = 800
+const MIN_WINDOW_HEIGHT = 600
+
+/** The persisted window-geometry file under the app's userData directory. */
+const WINDOW_STATE_FILE = join(app.getPath('userData'), 'window-state.json')
+
+/** How long a move/resize pauses before its bounds land on disk. */
+const WINDOW_STATE_SAVE_MS = 500
+
+/** The strip of the window that must stay visible after restoring bounds. */
+const VISIBLE_STRIP_PX = 40
+
+/** Window geometry as persisted by the main process and restored by the client. */
+interface WindowBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+/** Validate an unknown IPC payload as window bounds. */
+function parseBounds(value: unknown): WindowBounds | null {
+  if (typeof value !== 'object' || value === null) return null
+  const { x, y, width, height } = value as Record<string, unknown>
+  const finite = (n: unknown): n is number => typeof n === 'number' && Number.isFinite(n)
+  if (!finite(x) || !finite(y) || !finite(width) || !finite(height)) return null
+  return { x, y, width, height }
+}
+
+/** The persisted window bounds, or null when absent or corrupt. */
+function readWindowBounds(): WindowBounds | null {
+  try {
+    return parseBounds(JSON.parse(readFileSync(WINDOW_STATE_FILE, 'utf8')))
+  } catch {
+    // Missing or unreadable state; the caller falls back to the default placement.
+    return null
+  }
+}
+
+/** Write window bounds atomically (temp file + rename), so a crash never
+ * leaves a partial state file. */
+function writeWindowBounds(bounds: WindowBounds): void {
+  const tmp = `${WINDOW_STATE_FILE}.tmp`
+  writeFileSync(tmp, JSON.stringify(bounds))
+  renameSync(tmp, WINDOW_STATE_FILE)
+}
+
+/** Clamp restored bounds to the current display topology: the saved position
+ * can be stale when monitors were unplugged or the work area shrank. */
+function clampToVisible(bounds: WindowBounds): WindowBounds {
+  const { workArea } = screen.getDisplayMatching(bounds)
+  const width = Math.min(Math.max(bounds.width, MIN_WINDOW_WIDTH), workArea.width)
+  const height = Math.min(Math.max(bounds.height, MIN_WINDOW_HEIGHT), workArea.height)
+  const x = Math.min(
+    Math.max(bounds.x, workArea.x - width + VISIBLE_STRIP_PX),
+    workArea.x + workArea.width - VISIBLE_STRIP_PX,
+  )
+  const y = Math.min(
+    Math.max(bounds.y, workArea.y),
+    workArea.y + workArea.height - VISIBLE_STRIP_PX,
+  )
+  return { x, y, width, height }
+}
 
 /** Fail loud: report and terminate with a non-zero status. */
 function fatal(message: string): never {
@@ -85,8 +151,8 @@ function showMainWindow(): void {
     mainWindow = new BrowserWindow({
       width: 1280,
       height: 800,
-      minWidth: 800,
-      minHeight: 600,
+      minWidth: MIN_WINDOW_WIDTH,
+      minHeight: MIN_WINDOW_HEIGHT,
       title: 'DeepSeek Harness',
       icon: IS_MAC ? APP_ICON : (process.platform === 'win32' ? WINDOW_ICON_ICO : WINDOW_ICON),
       autoHideMenuBar: true,
@@ -102,6 +168,9 @@ function showMainWindow(): void {
       },
     })
     mainWindow.on('closed', () => { mainWindow = undefined })
+    // Persist the window geometry (debounced) so the next launch restores it.
+    mainWindow.on('moved', scheduleWindowStateSave)
+    mainWindow.on('resized', scheduleWindowStateSave)
     // Keep the injected title bar's restore icon in sync with the window state.
     mainWindow.on('maximize', () => { mainWindow?.webContents.send('dsh-window-maximize-state', true) })
     mainWindow.on('unmaximize', () => { mainWindow?.webContents.send('dsh-window-maximize-state', false) })
@@ -343,6 +412,31 @@ ipcMain.handle('dsh-window-is-maximized', (event): boolean => {
   return win?.isMaximized() ?? false
 })
 
+/** The persisted window bounds, served to the client for boot-time restore. */
+ipcMain.handle('dsh-window-get-saved-bounds', (): WindowBounds | null => readWindowBounds())
+
+/** Apply client-requested bounds, clamped to the current display topology. */
+ipcMain.handle('dsh-window-set-bounds', (event, value: unknown): boolean => {
+  const bounds = parseBounds(value)
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (bounds === null || win === null) return false
+  win.setBounds(clampToVisible(bounds))
+  return true
+})
+
+let saveWindowStateTimer: NodeJS.Timeout | undefined
+
+/** Debounced window-geometry save; maximized, minimized, and full-screen
+ * states are skipped so the file keeps the normal-window bounds. */
+function scheduleWindowStateSave(): void {
+  clearTimeout(saveWindowStateTimer)
+  saveWindowStateTimer = setTimeout(() => {
+    const win = mainWindow
+    if (win === undefined || win.isMaximized() || win.isMinimized() || win.isFullScreen()) return
+    writeWindowBounds(win.getBounds())
+  }, WINDOW_STATE_SAVE_MS)
+}
+
 /** Wait until the web server answers, so the window never opens on an error page. */
 async function waitForServer(url: string): Promise<void> {
   const deadline = Date.now() + READY_TIMEOUT_MS
@@ -372,7 +466,33 @@ function embeddedDshEntry(): string {
 }
 
 /** Where the packaged runtime lands on disk, keyed by app version. */
-const RUNTIME_NODE_MODULES = join(app.getPath('userData'), 'runtime', app.getVersion(), 'node_modules')
+const RUNTIME_DIR = join(app.getPath('userData'), 'runtime', app.getVersion())
+const RUNTIME_NODE_MODULES = join(RUNTIME_DIR, 'node_modules')
+/** The electron patch layer, materialized beside the runtime for the server child. */
+const RUNTIME_PATCH = join(RUNTIME_DIR, 'cordis.patch.yml')
+/** The electron app's own manifest, materialized beside the runtime for the server child. */
+const RUNTIME_PACKAGE_JSON = join(RUNTIME_DIR, 'package.json')
+
+/**
+ * The electron patch layer the embedded server applies via `--patch`: the
+ * checkout's file in dev, the asar copy in a packaged app (both sit one level
+ * above this entry's lib/). It inserts the electron-only UI adaptation rows
+ * that the web profile's own layers do not mount.
+ */
+function embeddedPatchFile(): string {
+  return join(dirname(fileURLToPath(import.meta.url)), '..', 'cordis.patch.yml')
+}
+
+/**
+ * The electron app's own manifest, the anchor whose dependency closure the
+ * profile fallback heals so the patch's bare plugin rows resolve: the checkout
+ * file in dev, the materialized copy in a packaged app.
+ */
+function electronManifestPath(): string {
+  return app.isPackaged
+    ? RUNTIME_PACKAGE_JSON
+    : join(dirname(fileURLToPath(import.meta.url)), '..', 'package.json')
+}
 
 /**
  * Recursively copy one directory tree onto disk.  The source lives inside an
@@ -410,19 +530,25 @@ async function copyDir(src: string, dst: string): Promise<void> {
 }
 
 /**
- * Materialize the bundled node_modules onto disk. dsh's profile fallback
- * heals symlinks that point at the installation; inside an asar those targets
- * do not exist on the real filesystem, so the server must run from a disk
- * copy. Cached per app version; the copy lands in a temp dir and renames into
- * place so an interrupted first run never leaves a partial tree.
+ * Materialize the bundled runtime onto disk. dsh's profile fallback heals
+ * symlinks that point at the installation; inside an asar those targets do not
+ * exist on the real filesystem, so the server must run from a disk copy.
+ * Cached per app version; the copy lands in a temp dir and renames into place
+ * so an interrupted first run never leaves a partial tree. The electron patch
+ * and the app's own manifest ride along: the server child is plain Node and
+ * cannot read asar paths, and its profile fallback heal needs the electron
+ * closure (the CLI's own closure lacks the electron-only plugin rows).
  */
 async function ensureRuntimeCopy(): Promise<void> {
-  if (existsSync(RUNTIME_NODE_MODULES)) return
-  const startedAt = Date.now()
-  const staging = `${RUNTIME_NODE_MODULES}.tmp`
-  await copyDir(join(app.getAppPath(), 'node_modules'), staging)
-  await rename(staging, RUNTIME_NODE_MODULES)
-  console.error(`electron: materialized runtime in ${Date.now() - startedAt}ms`)
+  if (!existsSync(RUNTIME_NODE_MODULES)) {
+    const startedAt = Date.now()
+    const staging = `${RUNTIME_NODE_MODULES}.tmp`
+    await copyDir(join(app.getAppPath(), 'node_modules'), staging)
+    await rename(staging, RUNTIME_NODE_MODULES)
+    console.error(`electron: materialized runtime in ${Date.now() - startedAt}ms`)
+  }
+  await writeFile(RUNTIME_PATCH, await readFile(embeddedPatchFile()))
+  await writeFile(RUNTIME_PACKAGE_JSON, await readFile(join(app.getAppPath(), 'package.json')))
 }
 
 /**
@@ -432,7 +558,11 @@ async function ensureRuntimeCopy(): Promise<void> {
  * @returns the loopback URL once the server is up.
  */
 function startEmbeddedServer(): Promise<string> {
-  const child = spawn(process.execPath, [embeddedDshEntry(), 'web', '--port', '0'], {
+  const patchPath = app.isPackaged ? RUNTIME_PATCH : embeddedPatchFile()
+  // --patch must precede --port: the CLI treats an unknown option's value as
+  // the first positional, after which enablePositionalOptions stops parsing
+  // options entirely.
+  const child = spawn(process.execPath, [embeddedDshEntry(), 'web', '--patch', patchPath, '--port', '0'], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
@@ -483,6 +613,15 @@ if (!app.requestSingleInstanceLock()) {
   app.on('before-quit', () => {
     if (serverProcess?.exitCode === null) serverProcess.kill()
   })
+  // Flush the last geometry on quit, so a move/resize right before exit is
+  // not lost to the debounce.
+  app.on('before-quit', () => {
+    clearTimeout(saveWindowStateTimer)
+    const win = mainWindow
+    if (win !== undefined && !win.isMaximized() && !win.isMinimized() && !win.isFullScreen()) {
+      writeWindowBounds(win.getBounds())
+    }
+  })
   void app.whenReady().then(async () => {
     // Windows keys the taskbar button off the app identity; matching the
     // packaged appId keeps dev runs grouped under the same icon.
@@ -492,6 +631,10 @@ if (!app.requestSingleInstanceLock()) {
     if (url === undefined) {
       try {
         if (app.isPackaged) await ensureRuntimeCopy()
+        // The patch's plugin rows resolve through the profile module
+        // fallback; heal it from the electron closure so the CLI's own heal
+        // (which lacks the electron-only rows) leaves them linked.
+        healProfilesModuleFallback(electronManifestPath())
         url = await startEmbeddedServer()
       } catch (error) {
         fatal(error instanceof Error ? error.message : String(error))

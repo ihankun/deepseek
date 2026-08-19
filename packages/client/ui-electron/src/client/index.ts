@@ -4,6 +4,8 @@
  */
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import { DefaultPlatformService } from './platform-service.ts'
+import { startWindowsTitlebarMerge } from './titlebar-merge.ts'
+import { restoreWindowState } from './window-state.ts'
 
 /** Services required by the Electron plugin. */
 export const inject = ['slots', 'layout']
@@ -20,12 +22,35 @@ export function apply(ctx: ClientContext): void {
 
   // Apply Electron-specific CSS if in Electron environment
   if (platformService.isElectron) {
-    // Add CSS class to body for Electron environment
-    document.body.classList.add('dsh-electron')
+    ctx.effect(() => {
+      // Add CSS class to body for Electron environment
+      document.body.classList.add('dsh-electron')
 
-    // Apply macOS-specific adaptations
-    if (platformService.isMac) {
-      document.body.classList.add('dsh-electron-mac')
+      // Apply macOS-specific adaptations
+      if (platformService.isMac) {
+        document.body.classList.add('dsh-electron-mac')
+      }
+
+      // On Windows the injected title bar's left side is empty; overlay the
+      // sidebar's logo row (brand + collapse toggle) into that band.
+      if (platformService.isWindows) {
+        document.body.classList.add('dsh-electron-win')
+      }
+
+      return () => {
+        document.body.classList.remove('dsh-electron', 'dsh-electron-mac', 'dsh-electron-win')
+      }
+    }, 'ui-electron: body platform classes')
+
+    if (platformService.isWindows) {
+      ctx.effect(() => startWindowsTitlebarMerge(), 'ui-electron: windows titlebar merge')
+    }
+
+    // Restore the window geometry persisted by the main process; the save
+    // side lives there, so this is the plugin's only part of the contract.
+    const dshWindow = window.dshWindow
+    if (dshWindow !== undefined) {
+      void restoreWindowState(dshWindow)
     }
   }
 }

@@ -111,6 +111,29 @@ async function renderTile(marginShare: number, cornerShare: number, cropShare?: 
 }
 
 /**
+ * Render a Windows tile from an existing finished tile: crop the source's
+ * transparent margin (icon2.png carries the macOS 9% inset) and scale the body
+ * to the near-full tile, so the mark fills the taskbar button.
+ */
+async function renderWinTileFromTile(sourcePng: string): Promise<Buffer> {
+  const bodySize = Math.round(SIZE * (1 - 2 * WIN_MARGIN_SHARE))
+  const body = await sharp(sourcePng)
+    .trim()
+    .resize({ width: bodySize, height: bodySize, fit: 'fill' })
+    .png()
+    .toBuffer()
+  const canvas = sharp({
+    create: {
+      width: SIZE,
+      height: SIZE,
+      channels: 4,
+      background: { r: 0, g: 0, b: 0, alpha: 0 },
+    },
+  })
+  return canvas.composite([{ input: body, gravity: 'centre' }]).png().toBuffer()
+}
+
+/**
  * Build a Windows .ico with BMP-format entries (one per resolution).
  * Windows renders BMP entries directly at each size — no downscaling — so
  * the icon fills the taskbar button instead of appearing small.
@@ -195,5 +218,7 @@ const macTile = await renderTile(MAC_MARGIN_SHARE, MAC_CORNER_SHARE)
 await writeFile(resolve(ASSETS, 'icon.png'), macTile)
 const winTile = await renderTile(WIN_MARGIN_SHARE, WIN_CORNER_SHARE)
 await writeFile(resolve(ASSETS, 'icon-win.png'), winTile)
-await writeIco(resolve(ASSETS, 'icon2.png'), resolve(ASSETS, 'icon2.ico'))
-console.log(`gen-electron-icons: wrote icon.png, icon-win.png (body ${Math.round(SIZE * (1 - 2 * WIN_MARGIN_SHARE))}px) and icon2.ico (BMP ${WIN_ICO_SIZES.join('/')})`)
+const icon2WinTile = await renderWinTileFromTile(resolve(ASSETS, 'icon2.png'))
+await writeFile(resolve(ASSETS, 'icon2-win.png'), icon2WinTile)
+await writeIco(resolve(ASSETS, 'icon2-win.png'), resolve(ASSETS, 'icon2-win.ico'))
+console.log(`gen-electron-icons: wrote icon.png, icon-win.png (body ${Math.round(SIZE * (1 - 2 * WIN_MARGIN_SHARE))}px), icon2-win.png and icon2-win.ico (BMP ${WIN_ICO_SIZES.join('/')})`)
