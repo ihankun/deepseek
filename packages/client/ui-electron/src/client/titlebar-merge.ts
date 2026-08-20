@@ -62,6 +62,30 @@ function findSidebarHeader(): SidebarHeader | null {
 }
 
 /**
+ * Apply the drag-region contract to the row's buttons: the toggle stays fully
+ * interactive, the brand button stays click-through except its graphic, so the
+ * strip drags the window while controls remain clickable.
+ * @param row - the logo row whose buttons to style.
+ */
+function styleButtons(row: HTMLElement): void {
+  const buttons = [...row.querySelectorAll('button')]
+  const toggle = buttons.at(-1)
+  for (const button of buttons) {
+    button.style.setProperty('-webkit-app-region', 'no-drag')
+    if (button === toggle) {
+      button.style.pointerEvents = 'auto'
+      continue
+    }
+    button.style.pointerEvents = 'none'
+    for (const graphic of button.querySelectorAll('svg')) {
+      graphic.style.pointerEvents = 'auto'
+      graphic.style.cursor = 'pointer'
+      graphic.style.setProperty('-webkit-app-region', 'no-drag')
+    }
+  }
+}
+
+/**
  * Overlay the sidebar's logo row into the injected title-bar band on Windows.
  * The row is fixed at the window's top-left, its width mirrors the sidebar
  * column, and pointer events pass through everywhere except the fold toggle
@@ -96,9 +120,18 @@ export class TitlebarMerger {
       this.restore()
       return
     }
-    if (header.logoRow === this.row) return
+    if (header.logoRow === this.row) {
+      this.patchButtons(header.logoRow)
+      // Keep width in sync when the column resizes while the row identity stays.
+      header.logoRow.style.width = `${header.column.clientWidth}px`
+      return
+    }
     this.restore()
     this.merge(header.logoRow, header.column, titlebar)
+  }
+
+  private patchButtons(row: HTMLElement): void {
+    styleButtons(row)
   }
 
   private merge(row: HTMLElement, column: HTMLElement, titlebar: HTMLElement): void {
@@ -119,27 +152,7 @@ export class TitlebarMerger {
     // drag region; the injected title bar below cannot serve click-through).
     row.style.setProperty('-webkit-app-region', 'drag')
 
-    // The fold toggle is the row's last button; everything else is the brand
-    // wordmark button, which spans the strip (flex: 1). Clickable elements
-    // over a drag region need an explicit `no-drag` to receive events — the
-    // same contract the injected title bar's own window controls follow. The
-    // toggle stays fully interactive; the brand button stays click-through
-    // except its wordmark graphic, so the rest of the strip drags the window.
-    const buttons = [...row.querySelectorAll('button')]
-    const toggle = buttons.at(-1)
-    for (const button of buttons) {
-      button.style.setProperty('-webkit-app-region', 'no-drag')
-      if (button === toggle) {
-        button.style.pointerEvents = 'auto'
-        continue
-      }
-      button.style.pointerEvents = 'none'
-      for (const graphic of button.querySelectorAll('svg')) {
-        graphic.style.pointerEvents = 'auto'
-        graphic.style.cursor = 'pointer'
-        graphic.style.setProperty('-webkit-app-region', 'no-drag')
-      }
-    }
+    styleButtons(row)
 
     this.row = row
     this.resizeObserver = new ResizeObserver(() => {

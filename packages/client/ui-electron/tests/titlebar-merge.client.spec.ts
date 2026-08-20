@@ -173,6 +173,31 @@ describe('TitlebarMerger', () => {
     merger.dispose()
   })
 
+  it('re-patches a remounted brand button inside the same row (collapse/expand)', async () => {
+    const { column, logoRow } = mount()
+    columnWidth(column, 280)
+    const merger = new TitlebarMerger()
+    merger.start()
+    const brand = logoRow.querySelector('button.brand') as HTMLElement
+    expect(brand.style.pointerEvents).toBe('none')
+    brand.remove()
+    await vi.waitFor(() => { expect(logoRow.querySelector('button.brand')).toBeNull() })
+    expect(logoRow.style.position).toBe('fixed')
+    const freshBrand = document.createElement('button')
+    freshBrand.className = 'brand'
+    freshBrand.innerHTML = '<svg></svg>'
+    logoRow.prepend(freshBrand)
+    await vi.waitFor(() => { expect(freshBrand.style.pointerEvents).toBe('none') })
+    expect(freshBrand.querySelector('svg')!.style.pointerEvents).toBe('auto')
+    expect(freshBrand.querySelector('svg')!.style.cursor).toBe('pointer')
+    columnWidth(column, 180)
+    const dummy = document.createElement('span')
+    logoRow.append(dummy)
+    dummy.remove()
+    await vi.waitFor(() => { expect(logoRow.style.width).toBe('180px') })
+    merger.dispose()
+  })
+
   it('restore tolerates a logo row that left the document', () => {
     const { column, logoRow } = mount()
     columnWidth(column, 280)
