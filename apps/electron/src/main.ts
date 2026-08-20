@@ -17,8 +17,9 @@
 
 import { app, BrowserWindow, Menu, Tray, dialog, ipcMain, nativeImage, nativeTheme, screen } from 'electron'
 import { spawn, type ChildProcess } from 'node:child_process'
+import { createHash } from 'node:crypto'
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
-import { mkdir, readFile, readdir, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { healProfilesModuleFallback } from '@deepseek-ai/dsh-app-boot'
@@ -532,6 +533,28 @@ const RUNTIME_NODE_MODULES = join(RUNTIME_DIR, 'node_modules')
 const RUNTIME_PATCH = join(RUNTIME_DIR, 'cordis.patch.yml')
 /** The electron app's own manifest, materialized beside the runtime for the server child. */
 const RUNTIME_PACKAGE_JSON = join(RUNTIME_DIR, 'package.json')
+/** Fingerprint file that tracks the bundled content hash for cache invalidation. */
+const RUNTIME_FINGERPRINT_FILE = join(RUNTIME_DIR, '.build-fingerprint')
+
+/**
+ * Compute a fingerprint of the bundled content that affects the runtime.
+ * Hashes the electron UI client bundle; falls back to package.json when
+ * the client bundle is unavailable (dev or incomplete build).
+ */
+async function computeBuildFingerprint(): Promise<string> {
+  try {
+    const clientPath = join(app.getAppPath(), 'node_modules', '@deepseek-ai', 'dsh-client-ui-electron', 'lib', 'client.js')
+    const buf = await readFile(clientPath)
+    return createHash('sha256').update(buf).digest('hex')
+  } catch {
+    try {
+      const pkg = await readFile(join(app.getAppPath(), 'package.json'))
+      return createHash('sha256').update(pkg).digest('hex')
+    } catch {
+      return ''
+    }
+  }
+}
 
 /**
  * The electron patch layer the embedded server applies via `--patch`: the
@@ -593,22 +616,51 @@ async function copyDir(src: string, dst: string): Promise<void> {
  * Materialize the bundled runtime onto disk. dsh's profile fallback heals
  * symlinks that point at the installation; inside an asar those targets do not
  * exist on the real filesystem, so the server must run from a disk copy.
- * Cached per app version; the copy lands in a temp dir and renames into place
- * so an interrupted first run never leaves a partial tree. The electron patch
- * and the app's own manifest ride along: the server child is plain Node and
- * cannot read asar paths, and its profile fallback heal needs the electron
- * closure (the CLI's own closure lacks the electron-only plugin rows).
+ * Cached per app version + build fingerprint; the copy lands in a temp dir and
+ * renames into place so an interrupted first run never leaves a partial tree.
+ * The electron patch and the app's own manifest ride along: the server child
+ * is plain Node and cannot read asar paths, and its profile fallback heal needs
+ * the electron closure (the CLI's own closure lacks the electron-only plugin rows).
  */
 async function ensureRuntimeCopy(): Promise<void> {
-  if (!existsSync(RUNTIME_NODE_MODULES)) {
+  const currentFingerprint = await computeBuildFingerprint()
+  let needsCopy = !existsSync(RUNTIME_NODE_MODULES)
+  if (!needsCopy && currentFingerprint) {
+    try {
+      const stored = (await readFile(RUNTIME_FINGERPRINT_FILE, 'utf8')).trim()
+      if (stored !== currentFingerprint) needsCopy = true
+    } catch {
+      // Missing or unreadable fingerprint => stale cache from before fingerprinting
+      needsCopy = true
+    }
+  }
+  if (needsCopy) {
+    if (existsSync(RUNTIME_NODE_MODULES)) {
+      await rm(RUNTIME_NODE_MODULES, { recursive: true, force: true })
+    }
+    await rm(`${RUNTIME_NODE_MODULES}.tmp`, { recursive: true, force: true }).catch(() => {})
+    await rm(RUNTIME_FINGERPRINT_FILE, { force: true }).catch(() => {})
     const startedAt = Date.now()
     const staging = `${RUNTIME_NODE_MODULES}.tmp`
     await copyDir(join(app.getAppPath(), 'node_modules'), staging)
     await rename(staging, RUNTIME_NODE_MODULES)
+    if (currentFingerprint) {
+      await mkdir(RUNTIME_DIR, { recursive: true })
+      await writeFile(RUNTIME_FINGERPRINT_FILE, currentFingerprint + '\n')
+    }
     console.error(`electron: materialized runtime in ${Date.now() - startedAt}ms`)
   }
   await writeFile(RUNTIME_PATCH, await readFile(embeddedPatchFile()))
   await writeFile(RUNTIME_PACKAGE_JSON, await readFile(join(app.getAppPath(), 'package.json')))
+  // Backfill fingerprint for caches that were valid but lacked the marker file
+  if (currentFingerprint && !needsCopy) {
+    try {
+      await readFile(RUNTIME_FINGERPRINT_FILE)
+    } catch {
+      await mkdir(RUNTIME_DIR, { recursive: true })
+      await writeFile(RUNTIME_FINGERPRINT_FILE, currentFingerprint + '\n')
+    }
+  }
 }
 
 /**

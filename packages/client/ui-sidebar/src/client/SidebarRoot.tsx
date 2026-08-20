@@ -134,6 +134,7 @@ export function SidebarRoot({
           <button
             type="button"
             className={clsx(css.brand, css.wide)}
+            data-brand="wordmark"
             aria-label={t('session.new.label')}
             onClick={() => { startSession() }}
           >

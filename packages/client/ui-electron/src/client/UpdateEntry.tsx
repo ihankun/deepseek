@@ -215,11 +215,12 @@ function UpdatePanel({ anchor, panelRef, store, onClose, t }: UpdatePanelProps) 
           </div>
         )}
 
-        {actionRow.length > 0 && <div className={css.actions}>{actionRow}</div>}
-
-        <a className={css.releaseLink} href={RELEASES_PAGE_URL} target="_blank" rel="noreferrer">
-          {t('update.openReleasePage')}
-        </a>
+        <div className={css.footerRow}>
+          <div className={css.actions}>{actionRow}</div>
+          <a className={css.releaseLink} href={RELEASES_PAGE_URL} target="_blank" rel="noreferrer">
+            {t('update.openReleasePage')}
+          </a>
+        </div>
       </div>
     </div>,
     document.body,

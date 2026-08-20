@@ -38,15 +38,17 @@ interface ResizeObserverAware {
 /** The attached badge instance, or null while not attached. */
 let instance: BadgeInstance | null = null
 
-/** The sidebar's brand button: the logo row's first button carrying the wordmark svg. */
+/** The sidebar's brand button: the logo row's button carrying the wordmark svg. */
 function findBrand(): HTMLElement | null {
   const outlet = document.querySelector('#root [data-slot="sidebar"]')
   const sidebarRoot = outlet?.firstElementChild
   const logoRow = sidebarRoot?.firstElementChild
   if (!(logoRow instanceof HTMLElement)) return null
-  for (const button of logoRow.querySelectorAll('button')) {
-    if (button.querySelector('svg') !== null) return button
-  }
+  // Only the expanded brand wordmark carries the version hover; the collapsed
+  // rail shows the fish/toggle button which must not receive the badge overlay
+  // (otherwise the fish and panel icons overlap on hover).
+  const brand = logoRow.querySelector('button[data-brand="wordmark"]')
+  if (brand instanceof HTMLElement && brand.querySelector('svg') !== null) return brand
   return null
 }
 

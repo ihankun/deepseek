@@ -28,7 +28,7 @@ function shellHtml(): string {
     '        <div data-slot="sidebar">',
     '          <div class="sidebar-root">',
     '            <div class="logo-row">',
-    '              <button class="brand"><svg data-name="wordmark"></svg></button>',
+    '              <button class="brand" data-brand="wordmark"><svg data-name="wordmark"></svg></button>',
     '              <button class="toggle"><svg data-name="panel"></svg></button>',
     '            </div>',
     '          </div>',
