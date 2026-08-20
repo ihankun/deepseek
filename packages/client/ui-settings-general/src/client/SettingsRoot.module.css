@@ -59,6 +59,14 @@
   justify-content: center;
 }
 
+/* Windows titlebar is 36px in-flow (apps/electron titlebar injection);
+   offset the fixed overlay so the centered panel is measured from the
+   available area below the bar, not the viewport top. */
+:global(body.dsh-electron-win) .overlay {
+  top: 36px;
+  height: calc(100vh - 36px);
+}
+
 .mask {
   position: absolute;
   inset: 0;
@@ -90,6 +98,11 @@
      styles/scrollbar.css for the rebinding contract). */
   --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2);
   --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2);
+}
+
+:global(body.dsh-electron-win) .panel {
+  height: min(800px, calc(100vh - 84px));
+  max-height: calc(100vh - 84px);
 }
 
 /* Nav rail (figma .Setting-nav 501:29958): 188 wide, pad (12,22,12,0),
