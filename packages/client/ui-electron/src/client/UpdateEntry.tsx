@@ -14,7 +14,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode, RefObject } from 'react'
 import { createPortal } from 'react-dom'
 import clsx from 'clsx'
-import { IconDownloadOutline16, IconLoadingOutline16, IconQuestionOutline14, IconSettingsOutline16, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconDownloadOutline16, IconLoadingOutline16, IconQuestionOutline14, Tooltip } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import { hasActionableUpdate, readyToInstall, useUpdaterStore, type UpdateEntryInjected } from './update-store.ts'
 import type { ElectronKey } from './locales.ts'
@@ -68,6 +68,9 @@ export function UpdateEntry({ wide, t, store }: UpdateEntryProps) {
       : state.status === 'not-available'
         ? 'update.upToDate'
         : 'update.title'
+  const title = state.status === 'error' && state.error
+    ? t('update.error', { error: state.error } as never)
+    : t(titleKey)
 
   const toggle = (): void => {
     const el = entryRef.current
@@ -85,7 +88,7 @@ export function UpdateEntry({ wide, t, store }: UpdateEntryProps) {
 
   return (
     <div ref={entryRef} className={css.entry}>
-      <Tooltip label={t(titleKey)} delayMs={500} disabled={wide}>
+      <Tooltip label={title} delayMs={500} disabled={wide}>
         <button
           type="button"
           className={clsx(css.button, actionable && css.active)}
@@ -164,7 +167,7 @@ function UpdatePanel({ anchor, panelRef, store, onClose, t }: UpdatePanelProps) 
   return createPortal(
     <div ref={panelRef} className={css.panel} role="dialog" aria-label={t('update.title')} style={{ bottom: anchor.bottom, left: anchor.left }}>
       <div className={css.panelHeader}>
-        <IconSettingsOutline16 size={14} />
+        <IconDownloadOutline16 size={14} />
         <span className={css.panelTitle}>{t('update.title')}</span>
         <button type="button" className={css.close} aria-label={t('update.title')} onClick={onClose}>×</button>
       </div>
