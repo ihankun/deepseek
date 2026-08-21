@@ -11,9 +11,11 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import { DefaultPlatformService } from './platform-service.ts'
 import { startWindowsTitlebarMerge } from './titlebar-merge.ts'
 import { startVersionBadge } from './version-badge.ts'
+import { injectFooterLayoutOverride } from './footer-override.ts'
 import { UpdateEntry } from './UpdateEntry.tsx'
 import { UpdateStore, type UpdateEntryInjected } from './update-store.ts'
 import { en, zh, type ElectronKey } from './locales.ts'
+import { HankunBrandMark, HankunBrandName } from './Brand.tsx'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -66,9 +68,19 @@ export function apply(ctx: ClientContext): void {
       ctx.effect(() => startWindowsTitlebarMerge(), 'ui-electron: windows titlebar merge')
     }
 
-    // Hovering the brand wordmark reveals the app version over the HARNESS
-    // badge plate (desktop shell only).
+    // Hankun's DeepSeek Harness brand: deepseek harness wordmark with hover
+    // version badge. Supersedes the generic fallback and survives upstream
+    // merges because it lives in ui-electron (electron-owned shell).
+    ctx.slots.inject('sidebar.brand.mark', () =>
+      ctx.slots.inject('sidebar.brand.name', () =>
+        ctx.slots.inject('conversation.hero.brand.mark', function* () {
+          yield ctx.slots.register({ name: 'sidebar.brand.mark' }, HankunBrandMark)
+          yield ctx.slots.register({ name: 'sidebar.brand.name' }, HankunBrandName)
+          yield ctx.slots.register({ name: 'conversation.hero.brand.mark' }, HankunBrandMark)
+        })))
+
     ctx.effect(() => startVersionBadge(), 'ui-electron: version badge')
+    ctx.effect(() => injectFooterLayoutOverride(), 'ui-electron: footer one-line')
 
     // The update entry rides the sidebar foot's action seat, so it appears
     // beside Settings only inside the desktop shell. One store instance is

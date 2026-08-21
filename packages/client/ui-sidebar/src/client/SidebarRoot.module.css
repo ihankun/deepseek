@@ -318,27 +318,27 @@
   justify-content: flex-end;
 }
 
-/* The narrow rail stacks the two controls vertically, centered; help sits
-   above settings with a tight 4px rhythm. */
 .collapsed .footArea {
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
 }
 
 .collapsed .settingsArea {
   order: 2;
+  display: flex;
+  justify-content: center;
+  width: auto;
 }
 
 .collapsed .footerActions {
   order: 1;
-}
-
-.collapsed .settingsArea,
-.collapsed .footerActions {
   display: flex;
+  flex-direction: column;
+  align-items: center;
   justify-content: center;
   width: auto;
+  gap: 4px;
 }
 
 /* Tighten the rail triggers' own margins so the foot gap is the sole rhythm. */

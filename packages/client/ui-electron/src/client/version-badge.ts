@@ -75,8 +75,16 @@ function sync(): void {
     detach()
     return
   }
-  const svg = brand.querySelector('svg')
+  // The new split brand renders mark (FishLogo) and name (BrandWordmark) as
+  // two separate slots; the HARNESS badge lives in the name wordmark
+  // (viewBox 26 0 156 24 or legacy 0 0 182 24), not in the FishLogo mark.
+  const wordmarkSvg = brand.querySelector('svg[viewBox="26 0 156 24"], svg[viewBox="0 0 182 24"]')
+  const svg = (wordmarkSvg as SVGSVGElement | null)
+    ?? (brand.querySelector('svg') as SVGSVGElement | null)
   if (!(svg instanceof SVGSVGElement) || instance?.brand === brand) return
+  // Skip the FishLogo fallback (23x17) which has no badge plate; allow
+  // test svg with no viewBox (width 0) to proceed
+  if (svg.viewBox.baseVal.width !== 0 && svg.viewBox.baseVal.width < 100) return
   detach()
   attach(brand, svg)
 }
@@ -111,9 +119,14 @@ function attach(brand: HTMLElement, svg: SVGSVGElement): void {
     const svgRect = svg.getBoundingClientRect()
     const brandRect = brand.getBoundingClientRect()
     if (svgRect.width === 0 || svgRect.height === 0) return
-    const scaleX = svgRect.width / VIEWBOX_WIDTH
+    // The split brand's name wordmark uses viewBox 26 0 156 24 (badge at 103.348),
+    // while the legacy full wordmark uses 0 0 182 24 (badge at 129.348).
+    const isSplit = svg.viewBox.baseVal.width === 156
+    const vbWidth = isSplit ? 156 : VIEWBOX_WIDTH
+    const badgeX = isSplit ? BADGE_X - 26 : BADGE_X
+    const scaleX = svgRect.width / vbWidth
     const scaleY = svgRect.height / VIEWBOX_HEIGHT
-    label.style.left = `${BADGE_X * scaleX + (svgRect.left - brandRect.left)}px`
+    label.style.left = `${badgeX * scaleX + (svgRect.left - brandRect.left)}px`
     label.style.top = `${BADGE_Y * scaleY + (svgRect.top - brandRect.top)}px`
     label.style.width = `${BADGE_WIDTH * scaleX}px`
     label.style.height = `${BADGE_HEIGHT * scaleY}px`

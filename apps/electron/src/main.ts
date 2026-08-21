@@ -674,7 +674,7 @@ function startEmbeddedServer(): Promise<string> {
   // --patch must precede --port: the CLI treats an unknown option's value as
   // the first positional, after which enablePositionalOptions stops parsing
   // options entirely.
-  const child = spawn(process.execPath, [embeddedDshEntry(), 'web', '--patch', patchPath, '--port', '0'], {
+  const child = spawn(process.execPath, [embeddedDshEntry(), 'web', '--patch', patchPath, '--port', '0', '--no-open'], {
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
     stdio: ['ignore', 'pipe', 'pipe'],
   })

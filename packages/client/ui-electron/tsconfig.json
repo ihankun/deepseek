@@ -12,6 +12,7 @@
     { "path": "../ui-slots" },
     { "path": "../ui-sidebar" },
     { "path": "../ui-primitives" },
+    { "path": "../ui-conversation" },
     { "path": "../locale" },
     { "path": "../runtime" },
     { "path": "../../runtime-diagnostics/invariants" }
