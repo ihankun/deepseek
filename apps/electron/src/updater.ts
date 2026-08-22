@@ -19,6 +19,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pkg from 'electron-updater'
 import type { UpdateInfo } from 'electron-updater'
+import { MAC_PRODUCT_NAME, macAssetNamePattern } from './mac-update-asset.ts'
 
 const { autoUpdater } = pkg
 
@@ -52,8 +53,6 @@ const RELEASES_API_URL = `https://api.github.com/repos/${GITHUB_REPO}/releases/l
 const MAC_UPDATE_CACHE_DIR = 'update-cache'
 /** Persisted user-approved download version (resumes after a restart). */
 const UPDATE_APPROVAL_FILE = 'update-download-approval.json'
-/** The release artifact prefix (electron-builder productName). */
-const PRODUCT_NAME = 'DeepSeek Harness'
 /** HTTP User-Agent sent to GitHub API and asset requests. */
 const USER_AGENT = 'DeepSeek-Harness'
 
@@ -332,7 +331,7 @@ async function checkForMacUpdate(setState: (patch: Partial<UpdaterState>) => voi
   setState({ status: 'checking', error: null })
   const release = await fetchLatestRelease()
   const arch = currentArch()
-  const asset = release.assets.find(item => new RegExp(`^${escapeRegExp(PRODUCT_NAME)}-.*-${arch}\\.zip$`).test(item.name))
+  const asset = release.assets.find(item => macAssetNamePattern(arch).test(item.name))
   if (!asset) throw new Error(`Update package for ${arch} not found`)
   const version = normalizeVersion(release.tagName)
   if (compareVersions(version, APP_VERSION) <= 0) {
@@ -383,7 +382,7 @@ async function fileMatchesDigest(filePath: string, digest: string | null, size: 
 
 /** Download the macOS update zip with streamed progress and SHA-256 verification. */
 async function downloadMacUpdate(update: MacUpdate, setState: (patch: Partial<UpdaterState>) => void): Promise<string> {
-  const destPath = join(macUpdateDir(), `${PRODUCT_NAME}-${update.version}-${currentArch()}.zip`)
+  const destPath = join(macUpdateDir(), `${MAC_PRODUCT_NAME}-${update.version}-${currentArch()}.zip`)
   if (await fileMatchesDigest(destPath, update.assetDigest, update.assetSize)) return destPath
   mkdirSync(macUpdateDir(), { recursive: true })
   setState({ status: 'downloading', progress: { percent: 0, transferred: 0, total: update.assetSize } })
@@ -463,9 +462,4 @@ function extractReleaseNotes(info: UpdateInfo): string | null {
     return note?.note ?? null
   }
   return null
-}
-
-/** Escape a literal string for use inside a RegExp. */
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
