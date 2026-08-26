@@ -34,8 +34,8 @@ pnpm run electron:dev              # boot the desktop shell (web server + window
 ## 打包
 
 ```sh
-pnpm run electron:build:mac        # macOS: release/DeepSeek Harness-<ver>-{arm64,x64}.{dmg,zip}
-pnpm run electron:build:win        # Windows: release/DeepSeek Harness-Setup-<ver>.exe
+pnpm run electron:build:mac        # macOS: release/DeepSeek.Harness-<ver>-{arm64,x64}.{dmg,zip}
+pnpm run electron:build:win        # Windows: release/DeepSeek.Harness-Setup-<ver>.exe
 ```
 
 打包需要已构建的 `lib/` 产物(先 `pnpm run build`)、`electron-builder` devDependency(`pnpm install`),以及下载 Electron dist 的网络。Windows 构建可在任意能运行 electron-builder 的主机执行;在 macOS 上还需要 Wine。macOS 图标由 electron-builder 从 `assets/icon2.png` 生成;Windows 安装包嵌入 `assets/icon2-win.ico`。NSIS 安装器为引导式(`oneClick: false`),允许用户自选安装目录。打包应用携带 `@deepseek-ai/dsh` 依赖树(electron-builder 从声明的 dependencies 收集),asar 内即包含内嵌服务器所需的全部内容。

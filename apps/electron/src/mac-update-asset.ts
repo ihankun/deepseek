@@ -1,14 +1,14 @@
 /**
  * Release-asset name matching for the macOS auto-update zip.
  *
- * electron-builder uploads artifacts with the productName's spaces replaced
- * by dots (`DeepSeek.Harness-<version>-<arch>.zip`), while local builds keep
- * the space, so both spellings must match.
+ * electron-builder's `artifactName` declares the dotted prefix
+ * (`DeepSeek.Harness-<version>-<arch>.zip`), so the local build output and
+ * the published GitHub release asset carry the same name verbatim.
  * @module @deepseek-ai/dsh-electron-app/mac-update-asset
  */
 
-/** The release artifact prefix (electron-builder productName). */
-export const MAC_PRODUCT_NAME = 'DeepSeek Harness'
+/** The release-artifact prefix declared by electron-builder's `artifactName`. */
+export const MAC_ARTIFACT_PREFIX = 'DeepSeek.Harness'
 
 /**
  * The release-asset name pattern for a macOS update zip of one architecture.
@@ -16,7 +16,7 @@ export const MAC_PRODUCT_NAME = 'DeepSeek Harness'
  * @returns the anchored pattern.
  */
 export function macAssetNamePattern(arch: string): RegExp {
-  return new RegExp(`^${escapeRegExp(MAC_PRODUCT_NAME).replace(/ /g, '[ .]')}-.*-${arch}\\.zip$`)
+  return new RegExp(`^${escapeRegExp(MAC_ARTIFACT_PREFIX)}-.*-${arch}\\.zip$`)
 }
 
 /** Escape a literal string for use inside a RegExp. */

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-22-mac-update-asset-dot-naming.md
-2026-08-22-mac-update-asset-dot-naming.md: f49dfb3669f4bd0afa31b11971b290a8d896b668
-2026-08-22-mac-update-asset-dot-naming.zh.md: a24ad98d066d4e5d67873dccff8e873b31f91f1b
+2026-08-22-mac-update-asset-dot-naming.md: 9910206c513eb94718a4026fae60a282373a68b2
+2026-08-22-mac-update-asset-dot-naming.zh.md: 2074fca4b6f8b6c83d132d18e907d9225f3cb213

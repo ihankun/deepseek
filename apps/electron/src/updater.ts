@@ -19,7 +19,7 @@ import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import pkg from 'electron-updater'
 import type { UpdateInfo } from 'electron-updater'
-import { MAC_PRODUCT_NAME, macAssetNamePattern } from './mac-update-asset.ts'
+import { MAC_ARTIFACT_PREFIX, macAssetNamePattern } from './mac-update-asset.ts'
 
 const { autoUpdater } = pkg
 
@@ -382,7 +382,7 @@ async function fileMatchesDigest(filePath: string, digest: string | null, size: 
 
 /** Download the macOS update zip with streamed progress and SHA-256 verification. */
 async function downloadMacUpdate(update: MacUpdate, setState: (patch: Partial<UpdaterState>) => void): Promise<string> {
-  const destPath = join(macUpdateDir(), `${MAC_PRODUCT_NAME}-${update.version}-${currentArch()}.zip`)
+  const destPath = join(macUpdateDir(), `${MAC_ARTIFACT_PREFIX}-${update.version}-${currentArch()}.zip`)
   if (await fileMatchesDigest(destPath, update.assetDigest, update.assetSize)) return destPath
   mkdirSync(macUpdateDir(), { recursive: true })
   setState({ status: 'downloading', progress: { percent: 0, transferred: 0, total: update.assetSize } })

@@ -34,8 +34,8 @@ pnpm run electron:dev              # boot the desktop shell (web server + window
 ## Packaging
 
 ```sh
-pnpm run electron:build:mac        # macOS: release/DeepSeek Harness-<ver>-{arm64,x64}.{dmg,zip}
-pnpm run electron:build:win        # Windows: release/DeepSeek Harness-Setup-<ver>.exe
+pnpm run electron:build:mac        # macOS: release/DeepSeek.Harness-<ver>-{arm64,x64}.{dmg,zip}
+pnpm run electron:build:win        # Windows: release/DeepSeek.Harness-Setup-<ver>.exe
 ```
 
 Packaging needs the built `lib/` entries (`pnpm run build` first), the `electron-builder` devDependency (`pnpm install`), and network access to download the Electron dist. The Windows build runs on any host that can run electron-builder; on macOS it additionally needs Wine. The macOS icon is generated from `assets/icon2.png` by electron-builder; the Windows installer embeds `assets/icon2-win.ico`. The NSIS installer is assisted (`oneClick: false`) and lets the user choose the install directory. The packaged app bundles the `@deepseek-ai/dsh` dependency tree (electron-builder collects it from the declared dependencies), so the asar contains everything the embedded server needs.

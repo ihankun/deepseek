@@ -80,7 +80,7 @@
     "npmRebuild": false,
     "mac": {
       "icon": "assets/icon2.png",
-      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "artifactName": "DeepSeek.Harness-${version}-${arch}.${ext}",
       "target": [
         "dmg",
         "zip"
@@ -91,7 +91,7 @@
       "target": [
         "nsis"
       ],
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "DeepSeek.Harness-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
